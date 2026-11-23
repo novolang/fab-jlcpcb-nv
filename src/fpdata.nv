@@ -1,0 +1,222 @@
+// fpdata — the facts the package carries as data, each with its source.
+//
+// There are three tables.
+//
+// ROTATIONS.  KiCad and JLCPCB's assembly machines do not always agree on
+// which way a footprint faces at rotation zero.  The Fabrication Toolkit
+// (https://github.com/bennymeg/Fabrication-Toolkit, Apache-2.0) keeps a
+// table of footprint-name patterns with the rotation to add and an offset
+// of the part's centre, in `plugins/transformations.csv`.  The table here
+// is that file as it stood at the commit
+// 7f627b6be76081b962161b9eb9fe3a326a18c915 (29 September 2026), row for
+// row in its order: the first row whose pattern matches a footprint's
+// name wins, as in the Toolkit's code.  The rows that repeat an earlier
+// pattern are kept, since they are unreachable there and here, and keeping
+// them keeps the table diffable against the source.  One row of the
+// source uses a negative look-ahead, `^SOP-(?!18_)`; this package's
+// regular expressions have none, so it is written as the two rows `^SOP-
+// 18_` (0 degrees) and `^SOP-` (270 degrees), which give the same answer
+// for every name.  The Toolkit's licence (Apache-2.0) allows this
+// reproduction; its text is at the source.
+//
+// HEADERS.  The columns of the bill of materials are those of JLCPCB's
+// sample BOM (https://s3.amazonaws.com/helpscout.net/docs/assets/59f1de7804286313cffbb22c/attachments/60ee4acd9e87cb3d0124d284/Sample-BOM_JLCSMT.xlsx,
+// read 23 November 2026): `Comment`, `Designator`, `Footprint`,
+// `JLCPCB Part #`.  The columns of the placement file are those of
+// https://jlcpcb.com/help/article/pick-place-file-for-pcb-assembly
+// (updated 9 September 2026): `Designator`, `Mid X`, `Mid Y`, `Rotation`,
+// `Layer`, in millimetres, with `Top` or `Bottom` as the layer and a
+// positive rotation counter-clockwise.
+//
+// LIMITS.  The capabilities are those on https://jlcpcb.com/capabilities/pcb-capabilities
+// and https://jlcpcb.com/capabilities/pcb-assembly-capabilities, read on
+// 23 November 2026.  A figure that depends on the copper weight is the
+// one for 1 oz.  The page is the manufacturer's to change; every figure
+// here is a statement of what the page said on that day.
+
+// One row of the rotation table.
+pub struct Row
+    pattern: Str
+    rotation: Float
+    dx: Float
+    dy: Float
+
+// What the manufacturer's pages say a board may be.
+//
+// A size is in millimetres.  `track` and `gap` are the least width and
+// spacing, `drill` the least drill, `annular` the least annular ring of a
+// plated hole and `annular_rec` the ring the page recommends.  `economic`
+// and `standard` are the two assembly classes.
+pub struct Limits
+    layers_max: Int
+    thickness_min: Float
+    thickness_max: Float
+    track_2: Float
+    track_n: Float
+    drill_2: Float
+    drill_n: Float
+    annular_2: Float
+    annular_n: Float
+    annular_rec_2: Float
+    annular_rec_n: Float
+    via_diameter_over_drill: Float
+    npth_drill: Float
+    smd_pad: Float
+
+// An assembly class: the layers it takes, the sizes of a single board in
+// millimetres, the thickness range, the quantities, and whether it takes
+// parts on both sides.
+pub struct Assembly
+    name: Str
+    layers_max: Int
+    both_sides: Bool
+    width_min: Float
+    height_min: Float
+    width_max: Float
+    height_max: Float
+    thickness_min: Float
+    thickness_max: Float
+    qty_min: Int
+    qty_max: Int
+
+// The columns of the bill of materials, in order.
+pub fn bom_header() -> [Str] []
+    ["Comment", "Designator", "Footprint", "JLCPCB Part #"]
+
+// The columns of the placement file, in order.
+pub fn cpl_header() -> [Str] []
+    ["Designator", "Mid X", "Mid Y", "Rotation", "Layer"]
+
+// The sources of the tables, as lines for a report.
+pub fn sources() -> [Str] []
+    ["rotations: Fabrication Toolkit plugins/transformations.csv at 7f627b6be76081b962161b9eb9fe3a326a18c915, Apache-2.0, https://github.com/bennymeg/Fabrication-Toolkit",
+     "bom columns: JLCPCB sample BOM, https://s3.amazonaws.com/helpscout.net/docs/assets/59f1de7804286313cffbb22c/attachments/60ee4acd9e87cb3d0124d284/Sample-BOM_JLCSMT.xlsx",
+     "cpl columns: https://jlcpcb.com/help/article/pick-place-file-for-pcb-assembly, updated 2026-09-09",
+     "capabilities: https://jlcpcb.com/capabilities/pcb-capabilities and https://jlcpcb.com/capabilities/pcb-assembly-capabilities, read 2026-11-23"]
+
+// The limits of the manufacturer's PCB capabilities page for a 1 oz board.
+//
+// Two-layer boards: tracks and gaps 0.10 mm, drills from 0.15 mm,
+// plated-hole annular ring 0.18 mm at the least and 0.25 mm recommended.
+// Multilayer boards: 0.09 mm, 0.15 mm, 0.15 mm at the least and 0.20 mm
+// recommended.  A via's diameter is to be 0.1 mm (0.15 mm preferred)
+// larger than its drill.  A non-plated hole is 0.5 mm at the least and an
+// SMD pad 0.25 mm square.  Thickness runs from 0.4 to 4.5 mm and the
+// layer count to 32.
+pub fn limits() -> Limits []
+    Limits { layers_max: 32,
+        thickness_min: 0.4,
+        thickness_max: 4.5,
+        track_2: 0.10,
+        track_n: 0.09,
+        drill_2: 0.15,
+        drill_n: 0.15,
+        annular_2: 0.18,
+        annular_n: 0.15,
+        annular_rec_2: 0.25,
+        annular_rec_n: 0.20,
+        via_diameter_over_drill: 0.1,
+        npth_drill: 0.5,
+        smd_pad: 0.25 }
+
+// The Economic and the Standard assembly classes of the assembly
+// capabilities page.
+//
+// Economic: single-sided placement, 2, 4 or 6 layers, 0.8 to 1.6 mm,
+// single boards of 10 by 10 to 470 by 500 mm, 2 to 50 pieces.  Standard:
+// both sides, 1 to 32 layers, no thickness limit, 70 by 70 to 460 by 500
+// mm, 2 to 80000 pieces.
+pub fn assemblies() -> [Assembly] []
+    [Assembly { name: "Economic",
+        layers_max: 6,
+        both_sides: false,
+        width_min: 10.0,
+        height_min: 10.0,
+        width_max: 470.0,
+        height_max: 500.0,
+        thickness_min: 0.8,
+        thickness_max: 1.6,
+        qty_min: 2,
+        qty_max: 50 },
+     Assembly { name: "Standard",
+        layers_max: 32,
+        both_sides: true,
+        width_min: 70.0,
+        height_min: 70.0,
+        width_max: 460.0,
+        height_max: 500.0,
+        thickness_min: 0.0,
+        thickness_max: 1000.0,
+        qty_min: 2,
+        qty_max: 80000 }]
+
+// The largest board, in millimetres, the PCB capabilities page gives for
+// a count of copper layers: 606 by 510 for one layer, 670 by 600 for two,
+// 663 by 593 for four and 656 by 586 for six and more.  A count of three
+// or five takes the figure of the next count up.
+pub fn max_size(layers: Int) -> [Float] []
+    if layers <= 1
+        [606.0, 510.0]
+    elif layers == 2
+        [670.0, 600.0]
+    elif layers <= 4
+        [663.0, 593.0]
+    else
+        [656.0, 586.0]
+
+// The rotation table, in the order of its source.
+pub fn rotations() -> [Row] []
+    [
+        Row { pattern: "^Bosch_LGA-", rotation: 90.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^CP_EIA-", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^CP_Elec_", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^C_Elec_", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^DFN-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^DFN-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^D_SOT-23", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^HTSSOP-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^HTSSOP-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^HTSSOP-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^JST_GH_SM", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^JST_PH_S", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^LQFP-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^MSOP-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^PowerPAK_SO-8_Single", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^QFN-", rotation: 90.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^R_Array_Concave_", rotation: 90.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^R_Array_Convex_", rotation: 90.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SC-74-6", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOIC-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOIC-16_", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOIC-8_", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOIC127P798X216-8N", rotation: -90.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOP-18_", rotation: 0.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOP-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOP-18_", rotation: 0.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOP-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOP-18_", rotation: 0.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOP-18_", rotation: 0.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOP-4_", rotation: 0.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOP-4_", rotation: 0.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOT-143", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOT-223", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOT-23", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOT-353", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOT-363", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOT-89", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SSOP-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SW_SPST_B3", rotation: 90.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^TDSON-8-1", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^TO-277", rotation: 90.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^TQFP-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^TSOT-23", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^TSSOP-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^UDFN-10", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^USON-10", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^VSON-8_", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^VSSOP-10_-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^VSSOP-10_-", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^VSSOP-8_", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^VSSOP-8_", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^VSSOP-8_3.0x3.0mm_P0.65mm", rotation: 270.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^qfn-", rotation: 90.0, dx: 0.0, dy: 0.0 }]

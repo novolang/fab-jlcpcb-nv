@@ -1,0 +1,128 @@
+// fpbom — the bill of materials in the columns JLCPCB takes.
+//
+// The bill of materials is the CSV `kicad-cli sch export bom` wrote into
+// the revision directory (see hardware-gates-nv): one line for each
+// group of symbols that agree in value, footprint, part number and
+// do-not-populate flag, with the columns `Designator`, `Comment`,
+// `Footprint`, the part-number field's name, `Quantity` and `DNP`.  The
+// part number is the symbol's own field, so the schematic stays the one
+// place it is written.
+//
+// JLCPCB's sample BOM has the columns `Comment`, `Designator`,
+// `Footprint` and `JLCPCB Part #`, with the designators of a line in one
+// cell, separated by commas.  A group marked do-not-populate has no line
+// in the file the manufacturer gets: it is not placed.
+//
+// The footprint column carries the package: a name such as
+// `Resistor_SMD:R_0603_1608Metric` of a resistor, capacitor, inductor,
+// diode or LED is written `0603`, as the Fabrication Toolkit does, and
+// any other footprint is written without its library.
+
+use std.csv
+use fpdata
+use fpfault
+
+// One line of the bill: the designators, the value, the footprint as the
+// schematic names it, the part number (empty when the symbol has none)
+// and whether the group is do-not-populate.
+pub struct BomLine
+    designators: [Str]
+    comment: Str
+    footprint: Str
+    part: Str
+    dnp: Bool
+
+// The index of the column `name` in the header row, or -1.
+fn column(header: [Str], name: Str) -> Int
+    var at = -1
+    for i in 0..list.len(header)
+        if header[i] == name and at < 0
+            at = i
+    at
+
+// The cell `i` of a row, or the empty string.
+fn cell(row: [Str], i: Int) -> Str
+    if i < 0 or i >= list.len(row)
+        ""
+    else
+        row[i]
+
+// Reads the CSV text of the bill, whose part-number column is named
+// `part_field`.  `file` names it in a fault.
+//
+// ```novo
+// use fpbom
+//
+// fn main() [io]
+//     let text = "\"Designator\",\"Comment\",\"Footprint\",\"LCSC\",\"Quantity\",\"DNP\"\n\"R1,R2\",\"10k\",\"Resistor_SMD:R_0603_1608Metric\",\"C25804\",\"2\",\"\"\n"
+//     match fpbom.parse(text, "LCSC", "bom.csv")
+//         Err(e) => println(e.message())
+//         Ok(ls) => println("${ls[0].part} ${list.len(ls[0].designators)}")   // C25804 2
+// ```
+pub fn parse(text: Str, part_field: Str, file: Str) -> Result<[BomLine], FpFault> []
+    let rows = csv.parse(text)
+    if list.len(rows) == 0
+        return Err(FpFile(file, "the bill of materials is empty"))
+    let header = rows[0]
+    let d = column(header, "Designator")
+    let c = column(header, "Comment")
+    let f = column(header, "Footprint")
+    let p = column(header, part_field)
+    let n = column(header, "DNP")
+    if d < 0 or c < 0 or f < 0 or p < 0
+        return Err(FpFile(file, "the header lacks one of Designator, Comment, Footprint and ${part_field}"))
+    var out: [BomLine] = []
+    for r in list.drop(rows, 1)
+        if list.len(r) > 1
+            let ds = list.filter(list.map(str.split(cell(r, d), ","), x => str.trim(x)), x => x != "")
+            list.push(out, BomLine { designators: ds,
+                comment: cell(r, c),
+                footprint: cell(r, f),
+                part: str.trim(cell(r, p)),
+                dnp: str.upper(str.trim(cell(r, n))) != "" and str.upper(str.trim(cell(r, n))) != "NO" and str.upper(str.trim(cell(r, n))) != "FALSE" })
+    Ok(out)
+
+// Whether `s` is a name of the form `R_0603_1608Metric`: a prefix of one
+// to four characters, the imperial size in digits, and a metric size of
+// digits followed by `Metric`.
+fn is_metric_name(s: Str) -> Bool
+    let parts = str.split(s, "_")
+    if list.len(parts) < 3
+        return false
+    let at = str.index(parts[2], "Metric") ?? -1
+    str.len(parts[0]) >= 1 and str.len(parts[0]) <= 4 and (str.to_int(parts[1]) ?? -1) >= 0 and at > 0 and (str.to_int(str.slice(parts[2], 0, at)) ?? -1) >= 0
+
+// The package a footprint name stands for: the imperial size of a
+// passive's `R_0603_1608Metric`, or the name without its library.
+//
+// ```novo
+// use fpbom
+//
+// fn main() [io]
+//     println(fpbom.package_of("Resistor_SMD:R_0603_1608Metric"))   // 0603
+//     println(fpbom.package_of("Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"))   // SOIC-8_3.9x4.9mm_P1.27mm
+// ```
+pub fn package_of(name: Str) -> Str []
+    let parts = str.split(name, ":")
+    let short = parts[list.len(parts) - 1]
+    if is_metric_name(short)
+        str.split(short, "_")[1]
+    else
+        short
+
+// Whether `s` is a part number as JLCPCB's parts library writes them: `C`
+// and digits.
+pub fn part_number_ok(s: Str) -> Bool []
+    str.len(s) >= 2 and str.starts_with(s, "C") and (str.to_int(str.slice(s, 1, str.len(s))) ?? -1) >= 0 and not str.contains(s, "-") and not str.contains(s, "+")
+
+// The lines the manufacturer gets: those not marked do-not-populate.
+pub fn placed(ls: [BomLine]) -> [BomLine] []
+    list.filter(ls, l => not l.dnp)
+
+// The text of the bill for upload: the header, then one line for each
+// group that is placed.
+pub fn jlc_csv(ls: [BomLine]) -> Str []
+    var rows: [[Str]] = [fpdata.bom_header()]
+    for l in placed(ls)
+        list.push(rows, [l.comment, str.join(l.designators, ","), package_of(l.footprint), l.part])
+    csv.stringify(rows) + "\n"

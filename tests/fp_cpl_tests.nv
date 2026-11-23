@@ -1,0 +1,228 @@
+// fp_cpl_tests — the placement file: the number format, the rotation
+// table, the corrections, and every rule of the Fabrication Toolkit that
+// the package follows, with the numbers worked out by hand.
+
+use std.test
+use fpboard
+use fpcpl
+use fpdata
+
+// A part at (x, y) turned `rot`, whose pads' centre is (cx, cy).
+fn mk(ref: Str, name: Str, side: Str, x: Float, y: Float, rot: Float, cx: Float, cy: Float) -> Part
+    Part { ref: ref,
+        value: "v",
+        name: name,
+        side: side,
+        x: x,
+        y: y,
+        rot: rot,
+        cx: cx,
+        cy: cy,
+        pads: 2,
+        dnp: false,
+        no_pos: false,
+        no_bom: false,
+        keys: [],
+        vals: [] }
+
+// The same part with fields.
+fn with_fields(p: Part, keys: [Str], vals: [Str]) -> Part
+    Part { ref: p.ref,
+        value: p.value,
+        name: p.name,
+        side: p.side,
+        x: p.x,
+        y: p.y,
+        rot: p.rot,
+        cx: p.cx,
+        cy: p.cy,
+        pads: p.pads,
+        dnp: p.dnp,
+        no_pos: p.no_pos,
+        no_bom: p.no_bom,
+        keys: keys,
+        vals: vals }
+
+// A board of these parts with the origin (ax, ay).
+fn board(parts: [Part], ax: Float, ay: Float) -> FabBoard
+    FabBoard { file: "b",
+        layers: 2,
+        thickness: 1.6,
+        width: 30.0,
+        height: 20.0,
+        aux_x: ax,
+        aux_y: ay,
+        min_track: 0.0,
+        min_via_drill: 0.0,
+        min_via_size: 0.0,
+        min_pth: 0.0,
+        min_npth: 0.0,
+        min_ring: 0.0,
+        parts: parts }
+
+fn one(p: Part, ax: Float, ay: Float, table: [Row]) -> Cpl
+    fpcpl.rows(board([p], ax, ay), table)[0]
+
+@test
+fn test_numbers_are_fixed_point_rounded_to_six_places_with_the_zeros_dropped()
+    test.assert_eq(fpcpl.fixed6(-12.3400004), "-12.34")
+    test.assert_eq(fpcpl.fixed6(100.0), "100")
+    test.assert_eq(fpcpl.fixed6(0.0000004), "0")
+    test.assert_eq(fpcpl.fixed6(-0.0000004), "0")
+    test.assert_eq(fpcpl.fixed6(0.000001), "0.000001")
+    test.assert_eq(fpcpl.fixed6(2.5), "2.5")
+    test.assert_eq(fpcpl.fixed6(-0.5), "-0.5")
+    test.assert_eq(fpcpl.fixed6(123456.789), "123456.789")
+    test.assert_eq(fpcpl.fixed6(0.1 + 0.2), "0.3")
+
+@test
+fn test_the_table_row_that_matches_is_the_first_in_the_sources_order()
+    let t = fpdata.rotations()
+    test.assert_eq((fpcpl.matching_row("Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", t) ?? t[0]).rotation, 270.0)
+    test.assert_eq((fpcpl.matching_row("Package_TO_SOT_SMD:SOT-23", t) ?? t[0]).rotation, 180.0)
+    test.assert_eq((fpcpl.matching_row("Package_DFN_QFN:QFN-32-1EP_5x5mm", t) ?? t[0]).rotation, 90.0)
+    test.assert_eq((fpcpl.matching_row("Package_SO:SOP-18_7.5x11.6mm", t) ?? t[0]).rotation, 0.0)
+    test.assert_eq((fpcpl.matching_row("Package_SO:SOP-8_3.9x4.9mm", t) ?? t[0]).rotation, 270.0)
+    test.assert_eq((fpcpl.matching_row("Package_SO:SOP-4_4.4x2.6mm", t) ?? t[0]).rotation, 270.0)
+    test.assert_eq((fpcpl.matching_row("Button_Switch_SMD:SW_SPST_B3U-1000P", t) ?? t[0]).rotation, 90.0)
+    test.assert_eq((fpcpl.matching_row("SOIC-8", t) ?? t[0]).rotation, 270.0)
+    test.assert(fpcpl.matching_row("Resistor_SMD:R_0603_1608Metric", t) == None)
+    test.assert(fpcpl.matching_row("R_0603", t) == None)
+
+@test
+fn test_a_pattern_is_matched_against_the_name_without_its_library_and_a_pattern_with_a_colon_against_the_whole()
+    let t = [Row { pattern: "^Special:Thing", rotation: 10.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^Thing", rotation: 20.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^Lib_A$", rotation: 30.0, dx: 0.0, dy: 0.0 }]
+    test.assert_eq((fpcpl.matching_row("Special:Thing", t) ?? t[0]).rotation, 10.0)
+    test.assert_eq((fpcpl.matching_row("Other:Thing_2", t) ?? t[0]).rotation, 20.0)
+    // No name matches, so the library nickname is tried.
+    test.assert_eq((fpcpl.matching_row("Lib_A:Whatever", t) ?? t[0]).rotation, 30.0)
+    test.assert(fpcpl.matching_row("Lib_B:Whatever", t) == None)
+
+@test
+fn test_a_part_on_top_takes_the_pad_centre_the_origin_and_the_flipped_y()
+    let r = one(mk("u1", "Foo:Bar", "top", 100.0, 100.0, 90.0, 100.0, 98.0), 10.0, 5.0, [])
+    test.assert_eq(r.designator, "U1")
+    test.assert_eq(r.x, 90.0)
+    test.assert_eq(r.y, -93.0)
+    test.assert_eq(r.rot, 90.0)
+    test.assert_eq(r.layer, "Top")
+    test.assert_eq(r.kicad_rot, 90.0)
+    test.assert_approx(r.shift, 2.0, 0.0000001)
+    test.assert_eq(r.rule, "")
+
+@test
+fn test_a_part_on_the_bottom_has_its_rotation_taken_from_180_and_wrapped()
+    test.assert_eq(one(mk("U1", "Foo:Bar", "bottom", 0.0, 0.0, 30.0, 0.0, 0.0), 0.0, 0.0, []).rot, 150.0)
+    test.assert_eq(one(mk("U1", "Foo:Bar", "bottom", 0.0, 0.0, 0.0, 0.0, 0.0), 0.0, 0.0, []).rot, 180.0)
+    test.assert_eq(one(mk("U1", "Foo:Bar", "bottom", 0.0, 0.0, 270.0, 0.0, 0.0), 0.0, 0.0, []).rot, 270.0)
+    test.assert_eq(one(mk("U1", "Foo:Bar", "bottom", 0.0, 0.0, 0.0, 0.0, 0.0), 0.0, 0.0, []).layer, "Bottom")
+    test.assert_eq(one(mk("U1", "Foo:Bar", "top", 0.0, 0.0, -90.0, 0.0, 0.0), 0.0, 0.0, []).rot, 270.0)
+    test.assert_eq(one(mk("U1", "Foo:Bar", "top", 0.0, 0.0, 450.0, 0.0, 0.0), 0.0, 0.0, []).rot, 90.0)
+
+@test
+fn test_a_table_row_adds_its_rotation_and_moves_the_part_by_its_offset_turned_with_it()
+    let t = [Row { pattern: "^Foo", rotation: 90.0, dx: 1.0, dy: 2.0 }]
+    // On top at rotation 0 the offset is (1, 2) as it stands.
+    let a = one(mk("U1", "L:Foo1", "top", 10.0, 10.0, 0.0, 10.0, 10.0), 0.0, 0.0, t)
+    test.assert_eq(a.rot, 90.0)
+    test.assert_eq(a.x, 11.0)
+    test.assert_eq(a.y, -8.0)
+    test.assert_eq(a.rule, "^Foo")
+    test.assert_eq(a.table_rot, 90.0)
+    // Turned 90 degrees the offset is (dx cos - dy sin, dx sin + dy cos) = (-2, 1).
+    let b = one(mk("U1", "L:Foo1", "top", 10.0, 10.0, 90.0, 10.0, 10.0), 0.0, 0.0, t)
+    test.assert_eq(b.x, 8.0)
+    test.assert_eq(b.y, -9.0)
+    test.assert_eq(b.rot, 180.0)
+    // On the bottom the offset is (dx cos + dy sin, dx sin - dy cos): (1, -2) at 0.
+    let c = one(mk("U1", "L:Foo1", "bottom", 10.0, 10.0, 0.0, 10.0, 10.0), 0.0, 0.0, t)
+    test.assert_eq(c.x, 11.0)
+    test.assert_eq(c.y, -12.0)
+    test.assert_eq(c.rot, 270.0)
+
+@test
+fn test_the_fields_of_a_footprint_add_a_rotation_and_a_position_and_choose_the_anchor()
+    let base = mk("U1", "L:Foo", "top", 10.0, 10.0, 0.0, 12.0, 10.0)
+    let rot = with_fields(base, ["FT Rotation Offset"], ["-90"])
+    test.assert_eq(one(rot, 0.0, 0.0, []).rot, 270.0)
+    let fallback = with_fields(base, ["RotOffset"], ["45"])
+    test.assert_eq(one(fallback, 0.0, 0.0, []).rot, 45.0)
+    let bad = with_fields(base, ["Rotation Offset"], ["tilt"])
+    test.assert_eq(one(bad, 0.0, 0.0, []).rot, 0.0)
+    let pos = with_fields(base, ["FT Position Offset"], ["0.5, -1"])
+    test.assert_eq(one(pos, 0.0, 0.0, []).x, 12.5)
+    test.assert_eq(one(pos, 0.0, 0.0, []).y, -11.0)
+    let broken = with_fields(base, ["PosOffset"], ["1"])
+    test.assert_eq(one(broken, 0.0, 0.0, []).x, 12.0)
+    let junk = with_fields(base, ["Position Offset"], ["a,b"])
+    test.assert_eq(one(junk, 0.0, 0.0, []).x, 12.0)
+    let anchor = with_fields(base, ["FT Origin"], ["Anchor"])
+    test.assert_eq(one(anchor, 0.0, 0.0, []).x, 10.0)
+    let origin = with_fields(base, ["Origin"], ["Anchor"])
+    test.assert_eq(one(origin, 0.0, 0.0, []).x, 10.0)
+    test.assert_eq(one(base, 0.0, 0.0, []).x, 12.0)
+
+@test
+fn test_a_part_that_is_do_not_populate_or_left_out_of_the_position_file_has_no_row()
+    let a = mk("A1", "L:N", "top", 1.0, 1.0, 0.0, 1.0, 1.0)
+    let b = Part { ref: "B1",
+        value: "v",
+        name: "L:N",
+        side: "top",
+        x: 2.0,
+        y: 2.0,
+        rot: 0.0,
+        cx: 2.0,
+        cy: 2.0,
+        pads: 1,
+        dnp: true,
+        no_pos: false,
+        no_bom: false,
+        keys: [],
+        vals: [] }
+    let c = Part { ref: "C1",
+        value: "v",
+        name: "L:N",
+        side: "top",
+        x: 3.0,
+        y: 3.0,
+        rot: 0.0,
+        cx: 3.0,
+        cy: 3.0,
+        pads: 1,
+        dnp: false,
+        no_pos: true,
+        no_bom: false,
+        keys: [],
+        vals: [] }
+    let rs = fpcpl.rows(board([a, b, c], 0.0, 0.0), [])
+    test.assert_eq(list.len(rs), 1)
+    test.assert_eq(rs[0].designator, "A1")
+
+@test
+fn test_the_file_has_the_manufacturers_header_and_a_line_for_each_row()
+    let p = mk("R1", "L:N", "top", 1.5, 2.0, 0.0, 1.5, 2.0)
+    let q = mk("R2", "L:N", "bottom", 3.0, 4.0, 90.0, 3.0, 4.0)
+    let text = fpcpl.csv(fpcpl.rows(board([p, q], 0.0, 0.0), []))
+    test.assert_eq(text, "Designator,Mid X,Mid Y,Rotation,Layer\nR1,1.5,-2,0,Top\nR2,3,-4,90,Bottom\n")
+
+@test
+fn test_the_report_names_each_change_and_counts_the_rows_that_have_none()
+    let t = [Row { pattern: "^SOIC-", rotation: 270.0, dx: 0.0, dy: 0.0 }]
+    let plain = mk("R1", "L:R_0603", "top", 1.0, 1.0, 0.0, 1.0, 1.0)
+    let table = mk("U1", "L:SOIC-8", "top", 5.0, 5.0, 0.0, 5.0, 5.0)
+    let bottom = mk("C1", "L:C_0603", "bottom", 8.0, 8.0, 0.0, 8.0, 8.0)
+    let moved = with_fields(mk("Q1", "L:X", "top", 2.0, 2.0, 0.0, 2.5, 2.0),
+        ["FT Rotation Offset", "FT Position Offset"],
+        ["90", "1,0"])
+    let rs = fpcpl.rows(board([plain, table, bottom, moved], 0.0, 0.0), t)
+    let lines = fpcpl.report(rs)
+    test.assert_eq(lines[0], "U1: rotation 0 -> 270, Top: table row ^SOIC-: rotation 270")
+    test.assert_eq(lines[1], "C1: rotation 0 -> 180, Bottom: bottom side: rotation is 180 minus the board's")
+    test.assert_eq(lines[2],
+        "Q1: rotation 0 -> 90, Top: field rotation offset 90; field position offset 1,0; position is the pad centre, 0.5 mm from the anchor")
+    test.assert_eq(lines[3], "1 row(s) are the board's own values")
+    test.assert_eq(list.len(fpcpl.rotated(rs)), 2)
+    test.assert_eq(fpcpl.report([])[0], "0 row(s) are the board's own values")

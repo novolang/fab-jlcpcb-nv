@@ -1,0 +1,28 @@
+revision rev-A: pass (kicad-cli 10.0.8)
+erc: pass: 0 error(s), 9 warning(s), 0 accepted, 0 excluded, 0 ignored, of 9
+  warning  mini.kicad_sch sheet / (100, 96.19) mm: Symbol pin or wire end off connection grid [endpoint_off_grid]: Symbol R1 Pin 1 [Passive, Line]
+  warning  mini.kicad_sch sheet / (100, 100) mm: The current configuration does not include the footprint library 'Resistor_SMD' [footprint_link_issues]: Symbol R1 [R]
+  warning  mini.kicad_sch sheet / (100, 100) mm: The current configuration does not include the symbol library 'Device' [lib_symbol_issues]: Symbol R1 [R]
+  warning  mini.kicad_sch sheet / (120, 96.19) mm: Symbol pin or wire end off connection grid [endpoint_off_grid]: Symbol R2 Pin 1 [Passive, Line]
+  warning  mini.kicad_sch sheet / (120, 100) mm: The current configuration does not include the footprint library 'Resistor_SMD' [footprint_link_issues]: Symbol R2 [R]
+  warning  mini.kicad_sch sheet / (120, 100) mm: The current configuration does not include the symbol library 'Device' [lib_symbol_issues]: Symbol R2 [R]
+  warning  mini.kicad_sch sheet / (140, 96.19) mm: Symbol pin or wire end off connection grid [endpoint_off_grid]: Symbol R3 Pin 1 [Passive, Line]
+  warning  mini.kicad_sch sheet / (140, 100) mm: The current configuration does not include the footprint library 'Resistor_SMD' [footprint_link_issues]: Symbol R3 [R]
+  warning  mini.kicad_sch sheet / (140, 100) mm: The current configuration does not include the symbol library 'Device' [lib_symbol_issues]: Symbol R3 [R]
+drc: pass: 0 error(s), 8 warning(s), 2 accepted, 0 excluded, 6 ignored, of 16
+  warning  mini.kicad_pcb (100, 100) mm: Silkscreen clipped by board edge [silk_edge_clearance]: Rectangle on Edge.Cuts; Reference field of H1
+  warning  mini.kicad_pcb (112, 108) mm: The current configuration does not include the footprint library 'Resistor_SMD' [lib_footprint_issues]: Footprint R1
+  warning  mini.kicad_pcb (118, 108) mm: The current configuration does not include the footprint library 'Resistor_SMD' [lib_footprint_issues]: Footprint R2
+  warning  mini.kicad_pcb (112, 112) mm: The current configuration does not include the footprint library 'Resistor_SMD' [lib_footprint_issues]: Footprint R3
+  warning  mini.kicad_pcb (103.5, 103.5) mm: The current configuration does not include the footprint library 'MountingHole' [lib_footprint_issues]: Footprint H1
+  warning  mini.kicad_pcb (126.5, 116.5) mm: The current configuration does not include the footprint library 'MountingHole' [lib_footprint_issues]: Footprint H2
+  warning  mini.kicad_pcb (112, 109) mm: Non-Mirrored text on back layer [nonmirrored_text_on_back_layer]: Reference field of R3
+  warning  mini.kicad_pcb (112, 115) mm: Non-Mirrored text on back layer [nonmirrored_text_on_back_layer]: Value field of R3 (4.7k)
+  accepted mini.kicad_pcb (103.5, 103.5) mm: Extra footprint [extra_footprint]: Footprint H1 -- mounting holes have no symbol
+  accepted mini.kicad_pcb (126.5, 116.5) mm: Extra footprint [extra_footprint]: Footprint H2 -- mounting holes have no symbol
+export bom: ok: 1 file(s)
+export schematic-pdf: ok: 1 file(s)
+export gerbers: ok: 10 file(s)
+export drill: ok: 2 file(s)
+export positions: ok: 1 file(s)
+export step: ok: 1 file(s)

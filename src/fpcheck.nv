@@ -1,0 +1,396 @@
+// fpcheck — the package against the manufacturer's published limits and
+// against itself.
+//
+// Every check states what it measured.  An `error` makes the package not
+// ready to order; a `warning` is for a person to read.  The figures of the
+// manufacturer are those of `fpdata` and carry the date they were read.
+//
+//   designators-unique   no designator is used twice on the board or in the
+//                        bill of materials
+//   part-numbers         every part that is placed has a part number, or is
+//                        marked do-not-populate or excluded from the
+//                        position file on purpose
+//   part-number-format   every part number is `C` and digits
+//   bom-cpl-agree        the bill and the placement file name the same parts
+//   footprints-agree     the bill's footprint is the board's footprint
+//   positions-agree      the placement file's anchors are those KiCad's own
+//                        position file gives
+//   assembly-class       the board belongs to the Economic or the Standard
+//                        assembly class, and fits its sizes
+//   board-size           the board is within the sizes of the manufacturer
+//   layers, thickness    within the manufacturer's range
+//   track-width          the narrowest track, and the project's setting
+//   clearance-setting    the project's smallest clearance
+//   drill                the smallest via, plated and non-plated drill
+//   annular-ring         the smallest ring of a via or a plated hole
+//   rotations            how many rows had a correction to review
+
+use std.csv
+use std.json
+use fpboard
+use fpbom
+use fpcpl
+use fpdata
+
+// One test and its verdict.  `severity` is `error` or `warning`.
+pub struct FpCheck
+    name: Str
+    ok: Bool
+    severity: Str
+    detail: Str
+
+// The numbers a project's rules give, read from its `.kicad_pro` text:
+// the smallest track width, clearance, through-hole diameter, via
+// diameter and via annular width.
+pub struct Rules
+    track: Float
+    clearance: Float
+    hole: Float
+    via: Float
+    ring: Float
+
+// The tolerance of every comparison, in millimetres.
+const EPS = 0.0005
+
+// A check that passed or failed.
+fn verdict(name: Str, severity: Str, bad: [Str], good: Str) -> FpCheck
+    if list.len(bad) == 0
+        FpCheck { name: name, ok: true, severity: severity, detail: good }
+    else
+        FpCheck { name: name, ok: false, severity: severity, detail: str.join(bad, "; ") }
+
+// A number as a short piece of text.
+fn n(x: Float) -> Str
+    fpcpl.fixed6(x)
+
+// A measure as text, `none` when it is zero because nothing was found.
+fn m(x: Float) -> Str
+    if x == 0.0
+        "none"
+    else
+        n(x)
+
+// The first `k` of the strings, then the count of the rest.
+fn some(xs: [Str], k: Int) -> Str
+    if list.len(xs) <= k
+        str.join(xs, ", ")
+    else
+        str.join(list.take(xs, k), ", ") + " and ${list.len(xs) - k} more"
+
+// The rules of a project file; zeros for what it does not give.
+pub fn rules_of(text: Str) -> Rules []
+    let doc = json.parse(text)
+    let r = match doc
+        Some(d) =>
+            match json.get(d, "board")
+                Some(b) =>
+                    match json.get(b, "design_settings")
+                        Some(ds) => json.get(ds, "rules")
+                        None     => None
+                None    => None
+        None    => None
+    match r
+        Some(x) => Rules { track: json.get_float(x, "min_track_width") ?? 0.0,
+            clearance: json.get_float(x, "min_clearance") ?? 0.0,
+            hole: json.get_float(x, "min_through_hole_diameter") ?? 0.0,
+            via: json.get_float(x, "min_via_diameter") ?? 0.0,
+            ring: json.get_float(x, "min_via_annular_width") ?? 0.0 }
+        None    => Rules { track: 0.0, clearance: 0.0, hole: 0.0, via: 0.0, ring: 0.0 }
+
+// The references that occur more than once in `refs`, each once.
+fn repeated(refs: [Str]) -> [Str]
+    var out: [Str] = []
+    var seen: [Str] = []
+    for r in refs
+        if list.contains(seen, r) and not list.contains(out, r)
+            list.push(out, r)
+        list.push(seen, r)
+    out
+
+// No designator is used twice.
+fn designators_unique(b: FabBoard, bom: [BomLine]) -> FpCheck
+    var bad: [Str] = []
+    let on_board = repeated(list.map(list.filter(b.parts, p => not str.contains(p.ref, "**")), p => str.upper(p.ref)))
+    if list.len(on_board) > 0
+        list.push(bad, "the board uses ${some(on_board, 6)} twice")
+    var all: [Str] = []
+    for l in fpbom.placed(bom)
+        for d in l.designators
+            list.push(all, str.upper(d))
+    let in_bom = repeated(all)
+    if list.len(in_bom) > 0
+        list.push(bad, "the bill lists ${some(in_bom, 6)} twice")
+    verdict("designators-unique", "error", bad, "every designator is used once")
+
+// The part number the bill gives a designator, or the empty string.
+fn part_for(bom: [BomLine], d: Str) -> Str
+    var found = ""
+    for l in fpbom.placed(bom)
+        if list.any(l.designators, x => str.upper(x) == d)
+            found = l.part
+    found
+
+// Every placed part has a part number.
+fn part_numbers(rows: [Cpl], bom: [BomLine]) -> FpCheck
+    let missing = list.filter(list.map(rows, r => r.designator), d => part_for(bom, d) == "")
+    var bad: [Str] = []
+    if list.len(missing) > 0
+        list.push(bad,
+            "${list.len(missing)} placed part(s) have no part number in the bill: ${some(missing, 10)}")
+    verdict("part-numbers", "error", bad, "all ${list.len(rows)} placed part(s) have a part number")
+
+// Every part number is `C` and digits.
+fn part_number_format(bom: [BomLine]) -> FpCheck
+    let bad = list.filter(fpbom.placed(bom), l => l.part != "" and not fpbom.part_number_ok(l.part))
+    verdict("part-number-format",
+        "error",
+        list.map(bad, l => "${some(l.designators, 3)} has \"${l.part}\", which is not C and digits"),
+        "every part number is C and digits")
+
+// The bill and the placement file name the same parts.
+fn bom_cpl_agree(rows: [Cpl], bom: [BomLine]) -> FpCheck
+    var bom_refs: [Str] = []
+    for l in fpbom.placed(bom)
+        for d in l.designators
+            list.push(bom_refs, str.upper(d))
+    let cpl_refs = list.map(rows, r => r.designator)
+    let only_bom = list.filter(bom_refs, d => not list.contains(cpl_refs, d))
+    let only_cpl = list.filter(cpl_refs, d => not list.contains(bom_refs, d))
+    var bad: [Str] = []
+    if list.len(only_bom) > 0
+        list.push(bad, "in the bill and not placed: ${some(only_bom, 10)}")
+    if list.len(only_cpl) > 0
+        list.push(bad, "placed and not in the bill: ${some(only_cpl, 10)}")
+    verdict("bom-cpl-agree",
+        "error",
+        bad,
+        "${list.len(bom_refs)} part(s) in the bill and ${list.len(cpl_refs)} placed, the same ones")
+
+// The bill's footprint is the board's.
+fn footprints_agree(b: FabBoard, bom: [BomLine]) -> FpCheck
+    var bad: [Str] = []
+    for l in fpbom.placed(bom)
+        for d in l.designators
+            match list.find(b.parts, p => str.upper(p.ref) == str.upper(d))
+                Some(p) =>
+                    if p.name != l.footprint
+                        list.push(bad, "${d}: bill ${l.footprint}, board ${p.name}")
+                None    => 0
+    verdict("footprints-agree",
+        "warning",
+        list.take(bad, 6),
+        "the footprints of the bill are those of the board")
+
+// KiCad's own position file agrees with the anchors the board gives.
+fn positions_agree(b: FabBoard, rows: [Cpl], pos: Str) -> FpCheck
+    var bad: [Str] = []
+    let table = csv.parse(pos)
+    var seen = 0
+    for r in list.drop(table, 1)
+        if list.len(r) >= 7
+            let d = str.upper(r[0])
+            match list.find(b.parts, p => str.upper(p.ref) == d)
+                Some(p) =>
+                    seen += 1
+                    let px = str.to_float(r[3]) ?? 0.0
+                    let py = str.to_float(r[4]) ?? 0.0
+                    let rot = str.to_float(r[5]) ?? 0.0
+                    let turn = (rot - p.rot) / 360.0
+                    if math.abs(px - p.x) > 0.001 or math.abs(py + p.y) > 0.001 or math.abs(turn - math.round(turn)) > 0.0001 or r[6] != p.side
+                        list.push(bad,
+                            "${d}: KiCad says (${n(px)}, ${n(py)}, ${n(rot)}, ${r[6]}), the board (${n(p.x)}, ${n(-p.y)}, ${n(p.rot)}, ${p.side})")
+                None    => list.push(bad, "${d} is in KiCad's position file and not on the board")
+    verdict("positions-agree",
+        "error",
+        list.take(bad, 6),
+        "${seen} position(s) of KiCad's file are the board's anchors")
+
+// The assembly class a board belongs to, as its name.
+//
+// Economic takes single-sided placement, 2, 4 or 6 layers, 0.8 to 1.6 mm,
+// and 2 to 50 pieces.  Standard takes both sides and the rest.  A board
+// that has parts on the bottom, or any other need Economic lacks, is
+// Standard.
+pub fn class_of(b: FabBoard, qty: Int) -> Str []
+    let e = fpdata.assemblies()[0]
+    let bottom = list.any(b.parts, p => p.side == "bottom" and not p.dnp and not p.no_pos)
+    if bottom or b.layers > e.layers_max or b.layers < 2 or b.thickness < e.thickness_min or b.thickness > e.thickness_max or qty > 0 and (qty < e.qty_min or qty > e.qty_max)
+        "Standard"
+    else
+        "Economic"
+
+// The assembly class and whether the board fits it.
+fn assembly_class(b: FabBoard, qty: Int) -> FpCheck
+    let name = class_of(b, qty)
+    var bad: [Str] = []
+    let at = if name == "Economic"
+        0
+    else
+        1
+    let a = fpdata.assemblies()[at]
+    if b.width < a.width_min or b.height < a.height_min
+        list.push(bad,
+            "${name} assembly takes a single board of ${n(a.width_min)} by ${n(a.height_min)} mm at the least, the board is ${n(b.width)} by ${n(b.height)}: it needs a panel, which this package does not make")
+    if qty > 0 and (qty < a.qty_min or qty > a.qty_max)
+        list.push(bad, "${name} assembly takes ${a.qty_min} to ${a.qty_max} pieces, not ${qty}")
+    verdict("assembly-class",
+        "warning",
+        bad,
+        "${name} assembly: ${if name == "Economic" then "single-sided, up to 6 layers, 0.8 to 1.6 mm" else "double-sided or beyond the Economic limits"}")
+
+// The board is within the sizes of the manufacturer.
+fn board_size(b: FabBoard) -> FpCheck
+    let mx = fpdata.max_size(b.layers)
+    var bad: [Str] = []
+    if b.width < 3.0 or b.height < 3.0
+        list.push(bad,
+            "the board is ${n(b.width)} by ${n(b.height)} mm: the manufacturer makes 3 by 3 mm at the least")
+    if math.max(b.width, b.height) > math.max(mx[0], mx[1]) or math.min(b.width, b.height) > math.min(mx[0], mx[1])
+        list.push(bad,
+            "the board is ${n(b.width)} by ${n(b.height)} mm: a ${b.layers}-layer board is at most ${n(mx[0])} by ${n(mx[1])}")
+    verdict("board-size",
+        "error",
+        bad,
+        "${n(b.width)} by ${n(b.height)} mm is within 3 by 3 and ${n(mx[0])} by ${n(mx[1])}")
+
+// The layer count is within the manufacturer's range.
+fn layers_check(b: FabBoard) -> FpCheck
+    let l = fpdata.limits()
+    var bad: [Str] = []
+    if b.layers < 1 or b.layers > l.layers_max
+        list.push(bad, "${b.layers} copper layers: the manufacturer makes 1 to ${l.layers_max}")
+    verdict("layers", "error", bad, "${b.layers} copper layer(s)")
+
+// The thickness is within the manufacturer's range.
+fn thickness_check(b: FabBoard) -> FpCheck
+    let l = fpdata.limits()
+    var bad: [Str] = []
+    if b.thickness < l.thickness_min - EPS or b.thickness > l.thickness_max + EPS
+        list.push(bad,
+            "${n(b.thickness)} mm: the manufacturer makes ${n(l.thickness_min)} to ${n(l.thickness_max)}")
+    verdict("thickness", "error", bad, "${n(b.thickness)} mm")
+
+// The narrowest track, measured and as the project sets it.
+fn track_check(b: FabBoard, r: Rules) -> FpCheck
+    let l = fpdata.limits()
+    let least = if b.layers <= 2
+        l.track_2
+    else
+        l.track_n
+    var bad: [Str] = []
+    if b.min_track > 0.0 and b.min_track < least - EPS
+        list.push(bad,
+            "the narrowest track is ${n(b.min_track)} mm, the manufacturer's least is ${n(least)} for ${b.layers} layers at 1 oz")
+    verdict("track-width",
+        "error",
+        bad,
+        (if b.min_track > 0.0 then "the narrowest track is ${n(b.min_track)} mm, the least is ${n(least)}" else "the board has no track"))
+
+// The project's rule settings against the manufacturer's least.
+fn setting_check(b: FabBoard, r: Rules) -> FpCheck
+    let l = fpdata.limits()
+    let least = if b.layers <= 2
+        l.track_2
+    else
+        l.track_n
+    var bad: [Str] = []
+    if r.track > 0.0 and r.track < least - EPS
+        list.push(bad,
+            "the project allows tracks of ${n(r.track)} mm, the manufacturer's least is ${n(least)}")
+    if r.clearance > 0.0 and r.clearance < least - EPS
+        list.push(bad,
+            "the project allows a clearance of ${n(r.clearance)} mm, the manufacturer's least is ${n(least)}")
+    if r.hole > 0.0 and r.hole < l.drill_n - EPS
+        list.push(bad,
+            "the project allows a through hole of ${n(r.hole)} mm, the manufacturer's least is ${n(l.drill_n)}")
+    if r.ring > 0.0 and r.ring < (if b.layers <= 2 then l.annular_2 else l.annular_n) - EPS
+        list.push(bad,
+            "the project allows an annular width of ${n(r.ring)} mm, the manufacturer's least is ${n((if b.layers <= 2 then l.annular_2 else l.annular_n))}")
+    verdict("clearance-setting",
+        "warning",
+        bad,
+        "the project's rule minimums are not below the manufacturer's: track ${m(r.track)}, clearance ${m(r.clearance)}")
+
+// The smallest drills.
+fn drill_check(b: FabBoard) -> FpCheck
+    let l = fpdata.limits()
+    let least = if b.layers <= 1
+        0.3
+    else
+        l.drill_2
+    var bad: [Str] = []
+    if b.min_via_drill > 0.0 and b.min_via_drill < least - EPS
+        list.push(bad, "the smallest via drill is ${n(b.min_via_drill)} mm, the least is ${n(least)}")
+    if b.min_pth > 0.0 and b.min_pth < least - EPS
+        list.push(bad, "the smallest plated drill is ${n(b.min_pth)} mm, the least is ${n(least)}")
+    if b.min_npth > 0.0 and b.min_npth < l.npth_drill - EPS
+        list.push(bad,
+            "the smallest non-plated drill is ${n(b.min_npth)} mm, the least is ${n(l.npth_drill)}")
+    if b.min_via_drill > 0.0 and b.min_via_size > 0.0 and b.min_via_size - b.min_via_drill < l.via_diameter_over_drill - EPS
+        list.push(bad,
+            "a via of ${n(b.min_via_size)} mm over a drill of ${n(b.min_via_drill)} is less than ${n(l.via_diameter_over_drill)} larger than its drill")
+    verdict("drill",
+        "error",
+        bad,
+        "smallest via drill ${m(b.min_via_drill)}, plated drill ${m(b.min_pth)}, non-plated drill ${m(b.min_npth)} (mm); the least is ${n(least)}")
+
+// The smallest annular ring.
+fn ring_check(b: FabBoard) -> FpCheck
+    let l = fpdata.limits()
+    let least = if b.layers <= 2
+        l.annular_2
+    else
+        l.annular_n
+    let rec = if b.layers <= 2
+        l.annular_rec_2
+    else
+        l.annular_rec_n
+    var bad: [Str] = []
+    if b.min_ring > 0.0 and b.min_ring < least - EPS
+        list.push(bad, "the smallest annular ring is ${n(b.min_ring)} mm, the absolute least is ${n(least)}")
+    let c = verdict("annular-ring",
+        "error",
+        bad,
+        "the smallest annular ring is ${m(b.min_ring)} mm, the least is ${n(least)} and ${n(rec)} is recommended")
+    c
+
+// How many rows had a correction to review.
+fn rotations_check(rows: [Cpl]) -> FpCheck
+    let r = fpcpl.rotated(rows)
+    var bad: [Str] = []
+    if list.len(r) > 0
+        list.push(bad,
+            "${list.len(r)} placed part(s) have a rotation correction to review in the manufacturer's preview: ${some(list.map(r, x => x.designator), 10)}")
+    verdict("rotations", "warning", bad, "no rotation correction")
+
+// Every check of the package, in the order of the list above.
+//
+// `qty` is the number of boards to be ordered, or zero when it is not
+// yet chosen.  `pos` is the text of KiCad's own position file and `rules`
+// the project's rule minimums.
+pub fn run(b: FabBoard, rows: [Cpl], bom: [BomLine], pos: Str, rules: Rules,
+           qty: Int) -> [FpCheck] []
+    [designators_unique(b, bom),
+        part_numbers(rows, bom),
+        part_number_format(bom),
+        bom_cpl_agree(rows, bom),
+        footprints_agree(b, bom),
+        positions_agree(b, rows, pos),
+        assembly_class(b, qty),
+        board_size(b),
+        layers_check(b),
+        thickness_check(b),
+        track_check(b, rules),
+        setting_check(b, rules),
+        drill_check(b),
+        ring_check(b),
+        rotations_check(rows)]
+
+// Whether no check of severity `error` failed.
+pub fn passes(cs: [FpCheck]) -> Bool []
+    list.all(cs, c => c.ok or c.severity != "error")
+
+// The checks as one line each: the verdict, the name and the detail.
+pub fn report(cs: [FpCheck]) -> [Str] []
+    list.map(cs,
+        c => "${if c.ok then "ok     " else (if c.severity == "error" then "ERROR  " else "warning")}  ${c.name}  ${c.detail}")

@@ -1,0 +1,148 @@
+// fppack — the order package of a revision, written beside it.
+//
+// `prepare` takes a project whose revision has run through
+// hardware-gates-nv and passed: the revision directory holds the Gerbers,
+// the drill files, `bom.csv` and `pos.csv`, and `gates.json` and the
+// manifest say that they are the outputs of the design as it stands.  A
+// revision that does not verify is refused, and so no package is made of
+// a design that failed its gates or changed after them.
+//
+// The package is written to `hardware/fab/<rev>/jlcpcb/`:
+//
+//   <name>-<rev>-gerbers.zip   every file of `gerber/`, stored
+//   bom.csv                    the bill in JLCPCB's columns
+//   cpl.csv                    the placement file
+//   corrections.txt            every rotation and position correction
+//   order-sheet.md             what to enter on the web, the checks, the open questions
+//   package-manifest.json      the files above with their SHA-256
+//
+// A package whose checks hold an error is written all the same, so that
+// the person can read what is wrong, and `Package.ready` is false.  No
+// order is placed and no service is called.
+
+use std.fs
+use std.json
+use std.bytes
+use hgrun
+use hgpolicy
+use hgmanifest
+use fpboard
+use fpbom
+use fpcheck
+use fpcpl
+use fpdata
+use fpfault
+use fpsheet
+use fpzip
+
+// What `prepare` made.
+//
+// `dir` is where the files are, `files` their names relative to `dir`,
+// `checks` the verdicts, `ready` whether no check of severity `error`
+// failed, `rows` the placement rows and `class` the assembly class.
+pub struct Package
+    dir: Str
+    files: [Str]
+    checks: [FpCheck]
+    ready: Bool
+    rows: [Cpl]
+    class: Str
+
+// The board file of a revision, as a path under `root/hardware`, read from
+// the manifest of the gates; the empty string when the manifest names none.
+fn board_of(manifest: Str) -> Str
+    var found = ""
+    let doc = json.parse(manifest) ?? json.object([])
+    for e in json.get_list(doc, "inputs") ?? []
+        let p = json.get_str(e, "path") ?? ""
+        if str.ends_with(p, ".kicad_pcb") and found == ""
+            found = p
+    found
+
+// The project file that goes with a board file.
+fn pro_of(board: Str) -> Str
+    str.slice(board, 0, str.len(board) - 10) + ".kicad_pro"
+
+// The text of the file at `path`, or a fault naming it.
+fn read_text(path: Str) -> Result<Str, FpFault> [fs]
+    match fs.read(path)
+        Some(t) => Ok(t)
+        None    => Err(FpFile(path, "cannot be read"))
+
+// The contents of the files of `dir`, in the order of the names.
+fn gerber_files(dir: Str) -> [Str] [fs]
+    list.sort(list.filter(fs.read_dir(dir), n => fs.is_file("${dir}/${n}")))
+
+// The part number field of the project: the policy's, or `LCSC`.
+fn part_field(hwdir: Str) -> Str [fs]
+    match fs.read("${hwdir}/gates.toml")
+        None    => "LCSC"
+        Some(t) =>
+            match hgpolicy.parse(t, "gates.toml")
+                Ok(p)  => p.part_field
+                Err(_) => "LCSC"
+
+// Writes the bytes `data` to the file `path`, replacing it; answers
+// whether it was written.
+fn write_bytes(path: Str, data: Bytes) -> Bool [fs]
+    fs.delete(path)
+    match fs.open_write(path)
+        None     => false
+        Some(fd) =>
+            let failed = fs.write_at(fd, 0, bytes.to_byte_list(data))
+            fs.close(fd)
+            failed == None
+
+// Writes the text `t` to `dir/name` and answers the name.
+fn put(dir: Str, name: Str, t: Str) -> Str [fs]
+    fs.write("${dir}/${name}", t)
+    name
+
+// Prepares the package of revision `rev` of the project under `root`.
+// `name` names the design in the files and `qty` is the number of boards
+// to order, or zero when it is not yet chosen.
+pub fn prepare(root: Str, rev: Str, name: Str, qty: Int) -> Result<Package, FpFault> [fs]
+    let hwdir = "${root}/hardware"
+    let rev_dir = "${hwdir}/fab/${rev}"
+    let problems = hgrun.verify(root, rev)
+    if list.len(problems) > 0
+        return Err(FpRevision(rev, problems))
+    let manifest = read_text("${rev_dir}/${hgmanifest.FILE}")!
+    let board_name = board_of(manifest)
+    if board_name == ""
+        return Err(FpFile("${rev_dir}/${hgmanifest.FILE}", "names no board file among its inputs"))
+    let board_path = "${hwdir}/${board_name}"
+    let b = fpboard.read(fs.read_bytes(board_path) ?? bytes.from_str(""), board_path)!
+    let bom = fpbom.parse(read_text("${rev_dir}/bom.csv")!, part_field(hwdir), "${rev_dir}/bom.csv")!
+    let pos = read_text("${rev_dir}/pos.csv")!
+    let rules = fpcheck.rules_of(fs.read("${hwdir}/${pro_of(board_name)}") ?? "")
+    let rows = fpcpl.rows(b, fpdata.rotations())
+    let cs = fpcheck.run(b, rows, bom, pos, rules, qty)
+    let class = fpcheck.class_of(b, qty)
+    let dir = "${rev_dir}/jlcpcb"
+    fs.mkdir_all(dir)
+    let zip_name = "${name}-${rev}-gerbers.zip"
+    let gerbers = gerber_files("${rev_dir}/gerber")
+    let contents = list.map(gerbers, g => fs.read_bytes("${rev_dir}/gerber/${g}") ?? bytes.from_str(""))
+    if not write_bytes("${dir}/${zip_name}", fpzip.archive(gerbers, contents))
+        return Err(FpFile("${dir}/${zip_name}", "cannot be written"))
+    var files: [Str] = [zip_name]
+    list.push(files, put(dir, "bom.csv", fpbom.jlc_csv(bom)))
+    list.push(files, put(dir, "cpl.csv", fpcpl.csv(rows)))
+    list.push(files, put(dir, "corrections.txt", str.join(fpcpl.report(rows), "\n") + "\n"))
+    let o = Order { name: name,
+        rev: rev,
+        qty: qty,
+        class: class,
+        files: list.concat(files, ["order-sheet.md", "package-manifest.json"]),
+        not_placed: fpsheet.not_placed(b) }
+    list.push(files, put(dir, "order-sheet.md", fpsheet.sheet(b, rows, bom, cs, o)))
+    fs.write("${dir}/package-manifest.json",
+        hgmanifest.build("fab-package-nv 0.1.0", "", dir, [], dir, files))
+    list.push(files, "package-manifest.json")
+    Ok(Package { dir: dir,
+        files: files,
+        checks: cs,
+        ready: fpcheck.passes(cs),
+        rows: rows,
+        class: class })

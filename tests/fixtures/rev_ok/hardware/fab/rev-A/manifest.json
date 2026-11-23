@@ -1,0 +1,103 @@
+{
+  "tool": "hardware-gates-nv 0.1.0",
+  "kicad": "10.0.8",
+  "inputs": [
+    {
+      "path": "gates.toml",
+      "sha256": "083d7e3a3da2107f660bb753a264d4688e7559c2a380607cab73b95080ad295e",
+      "bytes": 265
+    },
+    {
+      "path": "mini.kicad_pcb",
+      "sha256": "fd7dbc306dd979e5f465c115d37f97c0eb50e44407cb5c1945327841129826f8",
+      "bytes": 8921
+    },
+    {
+      "path": "mini.kicad_sch",
+      "sha256": "d211532486b5f17be0ea7e0f6c7c56b06636708874f629ad53e6345a178267b6",
+      "bytes": 4192
+    }
+  ],
+  "outputs": [
+    {
+      "path": "board.step",
+      "sha256": "7e14b87ede07ecc4f3db0e3b2711d60beef27934f4e1d6d5f240c9387106725a",
+      "bytes": 11916
+    },
+    {
+      "path": "bom.csv",
+      "sha256": "a6aec79394e87b936dd13fd18588a87ffa57694efa08df4b882196aabf1a1a10",
+      "bytes": 239
+    },
+    {
+      "path": "gerber/mini-B_Cu.gbl",
+      "sha256": "fcf31a16f3aaf1675fb20ac9d1f3f9c9566dc22701785504e850de0a7260d38c",
+      "bytes": 1242
+    },
+    {
+      "path": "gerber/mini-B_Mask.gbs",
+      "sha256": "62acc54f8f6c8ebd6076233fa6de7498de8ad59aa8a0675554fd478b58337666",
+      "bytes": 1288
+    },
+    {
+      "path": "gerber/mini-B_Paste.gbp",
+      "sha256": "7dd44ab0a04e8eb37c027ee9c2ae3dca4dee3a0f76e9588f7c718b961a8da3b1",
+      "bytes": 449
+    },
+    {
+      "path": "gerber/mini-B_Silkscreen.gbo",
+      "sha256": "8f31bfccb498956fdf7d0e9c1311d875c839c531548bd73ff8af5a5a85b8072a",
+      "bytes": 2570
+    },
+    {
+      "path": "gerber/mini-Edge_Cuts.gm1",
+      "sha256": "81bf1a729b9dfe1f415a83565d4da30864f8618d4fd7e744c3fe9c59b4050b07",
+      "bytes": 609
+    },
+    {
+      "path": "gerber/mini-F_Cu.gtl",
+      "sha256": "41d8d8403ef56e58ad8f672219e1a3fe407fa841b41776d64931a629234d8854",
+      "bytes": 1338
+    },
+    {
+      "path": "gerber/mini-F_Mask.gts",
+      "sha256": "a5731144a05b2089910098f86e9d1eb9d5cf2a341b1d5a92457c0c4d04700353",
+      "bytes": 1357
+    },
+    {
+      "path": "gerber/mini-F_Paste.gtp",
+      "sha256": "2d8e642b5def0a23e8bd25bad73ce4f3267f8be6e2027426163bd7e09b201eb4",
+      "bytes": 449
+    },
+    {
+      "path": "gerber/mini-F_Silkscreen.gto",
+      "sha256": "ee09f2d18d8a3c5f19f8e14e7f6bd026bb0aaaa491ee028c4c775054362fcfdc",
+      "bytes": 4403
+    },
+    {
+      "path": "gerber/mini-drl_map.pdf",
+      "sha256": "dfc6ce354ba4379b0980fa197c321c3f71800fda1b5a5546e7e4483ff1ff9b36",
+      "bytes": 11865
+    },
+    {
+      "path": "gerber/mini-job.gbrjob",
+      "sha256": "342c9d703897b1f10721ac5ff8149dbbc5d176501c26d8647a3c5931184208a5",
+      "bytes": 2437
+    },
+    {
+      "path": "gerber/mini.drl",
+      "sha256": "3395de518306e43c9dfeda3f8ad756da6f1a5d668d89163c03d78ef1b6e631d1",
+      "bytes": 354
+    },
+    {
+      "path": "pos.csv",
+      "sha256": "339da5d74ef1e3c9b5d6e2729f6613e6589946934825eb11f165b6ab2d420ce5",
+      "bytes": 240
+    },
+    {
+      "path": "schematic.pdf",
+      "sha256": "a59fbab6646e92bc459cca01d9d395f0bd94174da29f173c6078a392bb37bd15",
+      "bytes": 28250
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+// fp_data_tests — the tables the package carries: their shape, their
+// sources, and the figures they hold, each as the manufacturer's page
+// gave it.
+
+use std.test
+use fpdata
+
+@test
+fn test_the_rotation_table_has_the_rows_of_its_source_in_order()
+    let rows = fpdata.rotations()
+    // 49 rows in the source, plus one for the look-ahead row that is two here.
+    test.assert_eq(list.len(rows), 53)
+    test.assert_eq(rows[0].pattern, "^Bosch_LGA-")
+    test.assert_eq(rows[0].rotation, 90.0)
+    test.assert_eq(rows[list.len(rows) - 1].pattern, "^qfn-")
+    for r in rows
+        test.assert_eq(r.dx, 0.0)
+        test.assert_eq(r.dy, 0.0)
+        test.assert(str.starts_with(r.pattern, "^"))
+
+@test
+fn test_the_look_ahead_row_of_the_source_is_written_as_two_rows_with_the_same_answers()
+    let rows = fpdata.rotations()
+    let at = list.find(rows, r => r.pattern == "^SOP-18_")
+    test.assert(at != None)
+    let sop = list.find(rows, r => r.pattern == "^SOP-")
+    test.assert(sop != None)
+    test.assert_eq(list.len(list.filter(rows, r => str.contains(r.pattern, "(?!"))), 0)
+
+@test
+fn test_the_headers_are_those_of_the_manufacturers_sample_files()
+    test.assert_eq(fpdata.bom_header(), ["Comment", "Designator", "Footprint", "JLCPCB Part #"])
+    test.assert_eq(fpdata.cpl_header(), ["Designator", "Mid X", "Mid Y", "Rotation", "Layer"])
+    test.assert_eq(list.len(fpdata.sources()), 4)
+    test.assert(str.contains(fpdata.sources()[0], "7f627b6be76081b962161b9eb9fe3a326a18c915"))
+
+@test
+fn test_the_limits_are_the_figures_of_the_capabilities_page()
+    let l = fpdata.limits()
+    test.assert_eq(l.layers_max, 32)
+    test.assert_eq(l.track_2, 0.10)
+    test.assert_eq(l.track_n, 0.09)
+    test.assert_eq(l.drill_2, 0.15)
+    test.assert_eq(l.annular_2, 0.18)
+    test.assert_eq(l.annular_n, 0.15)
+    test.assert_eq(l.annular_rec_2, 0.25)
+    test.assert_eq(l.annular_rec_n, 0.20)
+    test.assert_eq(l.npth_drill, 0.5)
+    test.assert_eq(l.thickness_min, 0.4)
+    test.assert_eq(l.thickness_max, 4.5)
+    test.assert_eq(l.smd_pad, 0.25)
+    test.assert_eq(l.via_diameter_over_drill, 0.1)
+
+@test
+fn test_the_two_assembly_classes_and_the_largest_sizes_by_layer_count()
+    let a = fpdata.assemblies()
+    test.assert_eq(a[0].name, "Economic")
+    test.assert_eq(a[0].both_sides, false)
+    test.assert_eq(a[0].layers_max, 6)
+    test.assert_eq(a[0].qty_max, 50)
+    test.assert_eq(a[1].name, "Standard")
+    test.assert_eq(a[1].both_sides, true)
+    test.assert_eq(a[1].width_min, 70.0)
+    test.assert_eq(a[1].qty_max, 80000)
+    test.assert_eq(fpdata.max_size(1), [606.0, 510.0])
+    test.assert_eq(fpdata.max_size(2), [670.0, 600.0])
+    test.assert_eq(fpdata.max_size(3), [663.0, 593.0])
+    test.assert_eq(fpdata.max_size(4), [663.0, 593.0])
+    test.assert_eq(fpdata.max_size(6), [656.0, 586.0])
+    test.assert_eq(fpdata.max_size(20), [656.0, 586.0])

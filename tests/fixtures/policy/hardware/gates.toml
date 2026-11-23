@@ -1,0 +1,13 @@
+[gates]
+parity = "ignore"
+
+[severity.drc]
+lib_footprint_issues = "ignore"
+
+[[accept]]
+tool = "drc"
+type = "silk_edge_clearance"
+reason = "the reference text of a mounting hole may touch the edge"
+
+[bom]
+part_field = "LCSC"

@@ -1,0 +1,76 @@
+// fp_zip_tests — the CRC-32 and the stored ZIP archive: known answers,
+// the layout of the bytes, and the archive read back by unzip when it is
+// installed.
+
+use std.test
+use std.bytes
+use std.fs
+use std.process
+use fpzip
+
+fn b(s: Str) -> Bytes
+    bytes.from_str(s)
+
+@test
+fn test_the_crc_32_of_the_check_string_is_the_published_value()
+    test.assert_eq(fpzip.crc32(b("123456789")), 3421780262)
+    test.assert_eq(fpzip.crc32(b("")), 0)
+    test.assert_eq(fpzip.crc32(b("hello")), 907060870)
+
+@test
+fn test_an_archive_of_one_file_has_its_two_headers_and_the_end_record()
+    let z = fpzip.archive(["a.txt"], [b("hello")])
+    // 30 + 5 for the local header, 5 for the data, 46 + 5 for the
+    // central directory, 22 for the end record.
+    test.assert_eq(bytes.len(z), 113)
+    test.assert_eq(bytes.load_u32_le(z, 0), 67324752)
+    test.assert_eq(bytes.load_u32_le(z, 14), 907060870)
+    test.assert_eq(bytes.load_u32_le(z, 18), 5)
+    test.assert_eq(bytes.load_u16_le(z, 26), 5)
+    test.assert_eq(bytes.to_str(bytes.slice(z, 30, 35)), "a.txt")
+    test.assert_eq(bytes.to_str(bytes.slice(z, 35, 40)), "hello")
+    test.assert_eq(bytes.load_u32_le(z, 40), 33639248)
+    test.assert_eq(bytes.load_u32_le(z, 56), 907060870)
+    test.assert_eq(bytes.load_u32_le(z, 91), 101010256)
+    test.assert_eq(bytes.load_u16_le(z, 91 + 10), 1)
+    test.assert_eq(bytes.load_u32_le(z, 91 + 12), 51)
+    test.assert_eq(bytes.load_u32_le(z, 91 + 16), 40)
+
+@test
+fn test_every_entry_carries_the_fixed_date_and_the_archive_is_reproducible()
+    let a = fpzip.archive(["x", "y"], [b("1"), b("22")])
+    let c = fpzip.archive(["x", "y"], [b("1"), b("22")])
+    test.assert(a == c)
+    // The DOS date of the first local header is 1980-01-01, which is 33.
+    test.assert_eq(bytes.load_u16_le(a, 10), 0)
+    test.assert_eq(bytes.load_u16_le(a, 12), 33)
+    test.assert_eq(bytes.load_u16_le(a, bytes.len(a) - 22 + 10), 2)
+
+@test
+fn test_an_archive_of_no_file_is_the_end_record_alone()
+    let z = fpzip.archive([], [])
+    test.assert_eq(bytes.len(z), 22)
+    test.assert_eq(bytes.load_u32_le(z, 0), 101010256)
+
+@test
+fn test_unzip_lists_and_tests_the_archive_when_it_is_installed() [io, fs]
+    match process.run_ok("command -v unzip")
+        None    => println("skipped: unzip is not installed")
+        Some(_) =>
+            fs.mkdir_all("tests/_work")
+            let body = "line\n" + str.repeat("0123456789", 100)
+            let z = fpzip.archive(["one.gtl", "two.drl"], [b(body), b("x")])
+            fs.delete("tests/_work/t.zip")
+            match fs.open_write("tests/_work/t.zip")
+                None     => test.assert(false)
+                Some(fd) =>
+                    test.assert(fs.write_at(fd, 0, bytes.to_byte_list(z)) == None)
+                    fs.close(fd)
+            match process.run("unzip -tq tests/_work/t.zip 2>&1")
+                (out, code) =>
+                    test.assert_eq(code, 0)
+                    test.assert(str.contains(out, "No errors detected"))
+            match process.run("unzip -Z1 tests/_work/t.zip 2>&1")
+                (out, _) => test.assert_eq(out, "one.gtl\ntwo.drl\n")
+            match process.run("unzip -p tests/_work/t.zip two.drl 2>&1")
+                (out, _) => test.assert_eq(out, "x")

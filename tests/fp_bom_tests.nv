@@ -1,0 +1,88 @@
+// fp_bom_tests — the bill of materials: reading KiCad's CSV and writing
+// JLCPCB's.
+
+use std.test
+use fpbom
+
+fn text(rows: [Str]) -> Str
+    "\"Designator\",\"Comment\",\"Footprint\",\"LCSC\",\"Quantity\",\"DNP\"\n" + str.join(rows, "\n") + "\n"
+
+fn lines_of(t: Str) -> [BomLine]
+    match fpbom.parse(t, "LCSC", "bom.csv")
+        Ok(ls) => ls
+        Err(e) =>
+            test.assert_eq(e.message(), "")
+            []
+
+@test
+fn test_a_bill_reads_into_lines_with_their_designators_part_numbers_and_flags()
+    let ls = lines_of(text(["\"C1,C12, C16\",\"100nF\",\"Capacitor_SMD:C_0402_1005Metric\",\"C307331\",\"3\",\"\"",
+        "\"R9\",\"0\",\"Resistor_SMD:R_0603_1608Metric\",\"\",\"1\",\"\"",
+        "\"R5\",\"1k\",\"Resistor_SMD:R_0603_1608Metric\",\"C21190\",\"1\",\"DNP\""]))
+    test.assert_eq(list.len(ls), 3)
+    test.assert_eq(ls[0].designators, ["C1", "C12", "C16"])
+    test.assert_eq(ls[0].comment, "100nF")
+    test.assert_eq(ls[0].footprint, "Capacitor_SMD:C_0402_1005Metric")
+    test.assert_eq(ls[0].part, "C307331")
+    test.assert_eq(ls[0].dnp, false)
+    test.assert_eq(ls[1].part, "")
+    test.assert_eq(ls[2].dnp, true)
+    test.assert_eq(list.len(fpbom.placed(ls)), 2)
+
+@test
+fn test_the_dnp_column_may_say_yes_true_or_one_and_no_or_false_or_nothing_mean_populate()
+    for v in ["yes", "TRUE", "1", "x"]
+        let ls = lines_of(text(["\"R1\",\"1k\",\"F\",\"C1\",\"1\",\"${v}\""]))
+        test.assert_eq(ls[0].dnp, true)
+    for v in ["", "no", "FALSE", " "]
+        let ls = lines_of(text(["\"R1\",\"1k\",\"F\",\"C1\",\"1\",\"${v}\""]))
+        test.assert_eq(ls[0].dnp, false)
+
+@test
+fn test_a_bill_with_no_rows_or_a_missing_column_is_refused_by_file()
+    match fpbom.parse("", "LCSC", "bom.csv")
+        Ok(_)  => test.assert(false)
+        Err(e) => test.assert_eq(e.message(), "bom.csv: the bill of materials is empty")
+    match fpbom.parse("\"Designator\",\"Comment\"\n\"R1\",\"1k\"\n", "LCSC", "bom.csv")
+        Ok(_)  => test.assert(false)
+        Err(e) => test.assert_eq(e.message(), "bom.csv: the header lacks one of Designator, Comment, Footprint and LCSC")
+    match fpbom.parse(text([]), "JLCPCB Part #", "bom.csv")
+        Ok(_)  => test.assert(false)
+        Err(e) => test.assert(str.contains(e.message(), "JLCPCB Part #"))
+
+@test
+fn test_a_bill_without_the_dnp_column_populates_every_line()
+    let t = "Designator,Comment,Footprint,LCSC,Quantity\nR1,1k,L:R_0603_1608Metric,C1,1\n"
+    let ls = lines_of(t)
+    test.assert_eq(ls[0].dnp, false)
+    test.assert_eq(list.len(lines_of("Designator,Comment,Footprint,LCSC\nR1,1k,F,C1\n\n")), 1)
+
+@test
+fn test_a_passive_footprint_is_written_as_its_size_and_any_other_without_its_library()
+    test.assert_eq(fpbom.package_of("Resistor_SMD:R_0603_1608Metric"), "0603")
+    test.assert_eq(fpbom.package_of("Capacitor_SMD:C_0402_1005Metric"), "0402")
+    test.assert_eq(fpbom.package_of("LED_SMD:LED_0603_1608Metric"), "0603")
+    test.assert_eq(fpbom.package_of("Inductor_SMD:L_1206_3216Metric_Pad1.22x1.90mm_HandSolder"), "1206")
+    test.assert_eq(fpbom.package_of("R_0805_2012Metric"), "0805")
+    test.assert_eq(fpbom.package_of("Package_SO:SOIC-8_3.9x4.9mm_P1.27mm"), "SOIC-8_3.9x4.9mm_P1.27mm")
+    test.assert_eq(fpbom.package_of("Crystal_SMD_2016"), "Crystal_SMD_2016")
+    test.assert_eq(fpbom.package_of("Longname_0603_1608Metric"), "Longname_0603_1608Metric")
+    test.assert_eq(fpbom.package_of("R_x_1608Metric"), "R_x_1608Metric")
+    test.assert_eq(fpbom.package_of("R_0603_Metric"), "R_0603_Metric")
+    test.assert_eq(fpbom.package_of("R_0603_x1608Metric"), "R_0603_x1608Metric")
+    test.assert_eq(fpbom.package_of(""), "")
+
+@test
+fn test_a_part_number_is_c_and_digits()
+    for ok in ["C25804", "C1", "C2913204"]
+        test.assert(fpbom.part_number_ok(ok))
+    for bad in ["", "C", "25804", "c25804", "C25-804", "C25+4", "LCSC", "C 123", "C12a"]
+        test.assert_eq("${bad} ${fpbom.part_number_ok(bad)}", "${bad} false")
+
+@test
+fn test_the_file_for_upload_has_the_manufacturers_columns_and_no_line_for_a_part_not_placed()
+    let ls = lines_of(text(["\"C1,C12\",\"100nF\",\"Capacitor_SMD:C_0402_1005Metric\",\"C307331\",\"2\",\"\"",
+        "\"R5\",\"1k\",\"Resistor_SMD:R_0603_1608Metric\",\"C21190\",\"1\",\"DNP\"",
+        "\"U1\",\"nRF, 54\",\"Package_DFN_QFN:QFN-48\",\"C1\",\"1\",\"\""]))
+    test.assert_eq(fpbom.jlc_csv(ls),
+        "Comment,Designator,Footprint,JLCPCB Part #\n100nF,\"C1,C12\",0402,C307331\n\"nRF, 54\",U1,QFN-48,C1\n")
