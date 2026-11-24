@@ -1,0 +1,38 @@
+// fjfault — why a package could not be prepared.
+//
+// A package that is prepared with failing checks is not a fault: the
+// checks say what failed.  A fault is the case where the question could
+// not be asked: a file is missing, the board does not read, or the
+// revision directory is not the product of the design that is checked in.
+
+// Why the package could not be prepared.
+//
+// ```novo
+// use fjfault
+//
+// fn main() [io]
+//     println(fjfault.code_of(FjFile("a.csv", "missing")))   // file
+// ```
+pub enum FjFault
+    // A file is missing, empty or not what the package reads.
+    FjFile(path: Str, what: Str)
+    // The board file does not read; `what` is the reader's message.
+    FjBoard(what: Str)
+    // The revision directory is not the product of the checked-in design;
+    // `reasons` are the lines `hgrun.verify` answered.
+    FjRevision(rev: Str, reasons: [Str])
+
+impl Error for FjFault
+    // The one-line report.
+    fn message(self) -> Str
+        match self
+            FjFile(p, w)      => "${p}: ${w}"
+            FjBoard(w)        => w
+            FjRevision(r, rs) => "revision ${r} is not ready for a package: ${str.join(rs, "; ")}"
+
+// A short stable name for the kind of fault.
+pub fn code_of(f: FjFault) -> Str []
+    match f
+        FjFile(_, _)     => "file"
+        FjBoard(_)       => "board"
+        FjRevision(_, _) => "revision"

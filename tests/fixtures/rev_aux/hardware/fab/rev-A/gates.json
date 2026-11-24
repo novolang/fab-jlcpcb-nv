@@ -1,0 +1,208 @@
+{
+  "revision": "rev-A",
+  "kicad": "10.0.8",
+  "passed": true,
+  "verdicts": [
+    {
+      "tool": "erc",
+      "source": "mini.kicad_sch",
+      "passed": true,
+      "errors": [],
+      "warnings": [
+        {
+          "level": "warning",
+          "rule": "endpoint_off_grid",
+          "text": "mini.kicad_sch sheet / (100, 96.19) mm: Symbol pin or wire end off connection grid [endpoint_off_grid]: Symbol R1 Pin 1 [Passive, Line]",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "footprint_link_issues",
+          "text": "mini.kicad_sch sheet / (100, 100) mm: The current configuration does not include the footprint library 'Resistor_SMD' [footprint_link_issues]: Symbol R1 [R]",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "lib_symbol_issues",
+          "text": "mini.kicad_sch sheet / (100, 100) mm: The current configuration does not include the symbol library 'Device' [lib_symbol_issues]: Symbol R1 [R]",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "endpoint_off_grid",
+          "text": "mini.kicad_sch sheet / (120, 96.19) mm: Symbol pin or wire end off connection grid [endpoint_off_grid]: Symbol R2 Pin 1 [Passive, Line]",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "footprint_link_issues",
+          "text": "mini.kicad_sch sheet / (120, 100) mm: The current configuration does not include the footprint library 'Resistor_SMD' [footprint_link_issues]: Symbol R2 [R]",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "lib_symbol_issues",
+          "text": "mini.kicad_sch sheet / (120, 100) mm: The current configuration does not include the symbol library 'Device' [lib_symbol_issues]: Symbol R2 [R]",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "endpoint_off_grid",
+          "text": "mini.kicad_sch sheet / (140, 96.19) mm: Symbol pin or wire end off connection grid [endpoint_off_grid]: Symbol R3 Pin 1 [Passive, Line]",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "footprint_link_issues",
+          "text": "mini.kicad_sch sheet / (140, 100) mm: The current configuration does not include the footprint library 'Resistor_SMD' [footprint_link_issues]: Symbol R3 [R]",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "lib_symbol_issues",
+          "text": "mini.kicad_sch sheet / (140, 100) mm: The current configuration does not include the symbol library 'Device' [lib_symbol_issues]: Symbol R3 [R]",
+          "reason": ""
+        }
+      ],
+      "accepted": [],
+      "exclusions": [],
+      "excluded": 0,
+      "ignored": 0,
+      "total": 9
+    },
+    {
+      "tool": "drc",
+      "source": "mini.kicad_pcb",
+      "passed": true,
+      "errors": [],
+      "warnings": [
+        {
+          "level": "warning",
+          "rule": "silk_edge_clearance",
+          "text": "mini.kicad_pcb (100, 100) mm: Silkscreen clipped by board edge [silk_edge_clearance]: Rectangle on Edge.Cuts; Reference field of H1",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "lib_footprint_issues",
+          "text": "mini.kicad_pcb (112, 108) mm: The current configuration does not include the footprint library 'Resistor_SMD' [lib_footprint_issues]: Footprint R1",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "lib_footprint_issues",
+          "text": "mini.kicad_pcb (118, 108) mm: The current configuration does not include the footprint library 'Resistor_SMD' [lib_footprint_issues]: Footprint R2",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "lib_footprint_issues",
+          "text": "mini.kicad_pcb (112, 112) mm: The current configuration does not include the footprint library 'Resistor_SMD' [lib_footprint_issues]: Footprint R3",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "lib_footprint_issues",
+          "text": "mini.kicad_pcb (103.5, 103.5) mm: The current configuration does not include the footprint library 'MountingHole' [lib_footprint_issues]: Footprint H1",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "lib_footprint_issues",
+          "text": "mini.kicad_pcb (126.5, 116.5) mm: The current configuration does not include the footprint library 'MountingHole' [lib_footprint_issues]: Footprint H2",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "nonmirrored_text_on_back_layer",
+          "text": "mini.kicad_pcb (112, 109) mm: Non-Mirrored text on back layer [nonmirrored_text_on_back_layer]: Reference field of R3",
+          "reason": ""
+        },
+        {
+          "level": "warning",
+          "rule": "nonmirrored_text_on_back_layer",
+          "text": "mini.kicad_pcb (112, 115) mm: Non-Mirrored text on back layer [nonmirrored_text_on_back_layer]: Value field of R3 (4.7k)",
+          "reason": ""
+        }
+      ],
+      "accepted": [
+        {
+          "level": "error",
+          "rule": "extra_footprint",
+          "text": "mini.kicad_pcb (103.5, 103.5) mm: Extra footprint [extra_footprint]: Footprint H1",
+          "reason": "mounting holes have no symbol"
+        },
+        {
+          "level": "error",
+          "rule": "extra_footprint",
+          "text": "mini.kicad_pcb (126.5, 116.5) mm: Extra footprint [extra_footprint]: Footprint H2",
+          "reason": "mounting holes have no symbol"
+        }
+      ],
+      "exclusions": [],
+      "excluded": 0,
+      "ignored": 6,
+      "total": 16
+    }
+  ],
+  "exports": [
+    {
+      "name": "bom",
+      "ok": true,
+      "files": [
+        "bom.csv"
+      ],
+      "detail": "1 file(s)"
+    },
+    {
+      "name": "schematic-pdf",
+      "ok": true,
+      "files": [
+        "schematic.pdf"
+      ],
+      "detail": "1 file(s)"
+    },
+    {
+      "name": "gerbers",
+      "ok": true,
+      "files": [
+        "gerber/mini-B_Cu.gbl",
+        "gerber/mini-B_Mask.gbs",
+        "gerber/mini-B_Paste.gbp",
+        "gerber/mini-B_Silkscreen.gbo",
+        "gerber/mini-Edge_Cuts.gm1",
+        "gerber/mini-F_Cu.gtl",
+        "gerber/mini-F_Mask.gts",
+        "gerber/mini-F_Paste.gtp",
+        "gerber/mini-F_Silkscreen.gto",
+        "gerber/mini-job.gbrjob"
+      ],
+      "detail": "10 file(s)"
+    },
+    {
+      "name": "drill",
+      "ok": true,
+      "files": [
+        "gerber/mini-drl_map.pdf",
+        "gerber/mini.drl"
+      ],
+      "detail": "2 file(s)"
+    },
+    {
+      "name": "positions",
+      "ok": true,
+      "files": [
+        "pos.csv"
+      ],
+      "detail": "1 file(s)"
+    },
+    {
+      "name": "step",
+      "ok": true,
+      "files": [
+        "board.step"
+      ],
+      "detail": "1 file(s)"
+    }
+  ]
+}

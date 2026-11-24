@@ -1,0 +1,16 @@
+// fj_fault_tests — the faults of the package: their messages and codes.
+
+use std.test
+use fjfault
+
+@test
+fn test_each_fault_has_a_message_that_names_what_failed()
+    test.assert_eq(FjFile("a.csv", "cannot be read").message(), "a.csv: cannot be read")
+    test.assert_eq(FjBoard("b.kicad_pcb: no outline").message(), "b.kicad_pcb: no outline")
+    test.assert_eq(FjRevision("rev-A", ["x", "y"]).message(), "revision rev-A is not ready for a package: x; y")
+
+@test
+fn test_each_fault_has_a_short_stable_code()
+    test.assert_eq(fjfault.code_of(FjFile("a", "b")), "file")
+    test.assert_eq(fjfault.code_of(FjBoard("a")), "board")
+    test.assert_eq(fjfault.code_of(FjRevision("a", [])), "revision")

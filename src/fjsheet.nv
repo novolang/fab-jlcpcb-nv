@@ -1,0 +1,146 @@
+// fjsheet — the sheet a person reads before ordering on the web.
+//
+// The package places no order and calls no service.  The sheet says what
+// is in the package, which assembly class the board belongs to, what to
+// enter on JLCPCB's web form, which rotations to look at in the preview,
+// what the checks found, and what the package could not decide.  The
+// steps of the form are those of JLCPCB's help page "How do I place a
+// PCBA order?" (https://jlcpcb.com/help/article/how-do-i-place-a-pcba-order,
+// updated 9 September 2026).
+
+use fjboard
+use fjbom
+use fjcheck
+use fjcpl
+use fjdata
+
+// What a package is made of, as the sheet states it.
+//
+// `name` and `rev` name the design and its revision, `qty` is the
+// number of boards or zero, `class` the assembly class, `files` the
+// files of the package, `not_placed` the references the design leaves
+// out (do-not-populate, or not in the position file), `skipped` the
+// parts the policy leaves out, each as `reference: reason`, `forced` the
+// designators of the parts that only Standard assembly places, and
+// `refused` whether a placed part has no part number, in which case no
+// file but this sheet is written.
+pub struct Order
+    name: Str
+    rev: Str
+    qty: Int
+    class: Str
+    files: [Str]
+    not_placed: [Str]
+    skipped: [Str]
+    forced: [Str]
+    refused: Bool
+
+// The references of the parts a board has that are not placed: marked
+// do-not-populate or left out of the position file.
+pub fn not_placed(b: FabBoard) -> [Str] []
+    list.map(list.filter(b.parts, p => p.dnp or p.no_pos), p => p.ref)
+
+// The open questions of an order, as lines.
+pub fn questions(b: FabBoard, o: Order) -> [Str] []
+    var out: [Str] = ["Quantity: how many boards and how many assembled?  The package leaves it to the form" + (if o.qty > 0 then ", and the checks used ${o.qty}." else ".")]
+    list.push(out,
+        "Surface finish and solder mask colour are not in a board file; the form asks for them.  A finish other than the default is a choice for fine-pitch or BGA parts.")
+    list.push(out,
+        "Copper weight: every capability figure used is for 1 oz.  A board that needs more copper is checked against other figures.")
+    list.push(out,
+        "Does the manufacturer take plated and non-plated holes in one drill file?  The article's steps produce one; not read on a manufacturer page.")
+    list.push(out,
+        "Are the rotations right?  The table is the Fabrication Toolkit's.  The preview after `Process BOM&CPL` shows each part; correct a part there or give it a rotation field and run again.")
+    list.push(out,
+        "Is every part in stock?  The public part pages do not show the stock; the form's list of matched parts does (a column of shortages).")
+    list.push(out,
+        "How many of each part will the form order?  Its own minimum order and attrition, not ${if o.qty > 0 then "${o.qty}" else "the number of boards"} times the count: on 2026-11-24 a dry run for 5 boards had 20 of three parts that need 5 each, and 14 of a part used twice a board.  Read the quantity column of the matched parts and price from that.")
+    if o.class == "Standard" and (b.width < 70.0 or b.height < 70.0)
+        list.push(out,
+            "Standard assembly is given for single boards of 70 by 70 mm and more; this board is ${fjcpl.fixed6(b.width)} by ${fjcpl.fixed6(b.height)} mm.  Is a panel needed, and does the manufacturer make it?")
+    if list.len(o.not_placed) > 0
+        list.push(out,
+            "${list.len(o.not_placed)} part(s) are left out by the design (${str.join(list.take(o.not_placed, 12), ", ")}).  Is that what is meant?")
+    if list.len(o.skipped) > 0
+        list.push(out,
+            "${list.len(o.skipped)} part(s) are left out by the policy: ${str.join(list.take(o.skipped, 12), "; ")}.  Is that what is meant?")
+    out
+
+// The assembly side the form is told, in words.
+fn side_words(top: Int, bottom: Int) -> Str
+    if bottom > 0 and top > 0
+        "both sides: only the Standard class takes them"
+    elif bottom > 0
+        "bottom"
+    else
+        "top"
+
+// The order sheet as text, in Markdown.
+pub fn sheet(b: FabBoard, rows: [Cpl], bom: [BomLine], cs: [FjCheck], o: Order) -> Str []
+    let top = list.len(list.filter(rows, r => r.layer == "Top"))
+    let bottom = list.len(rows) - top
+    var out: [Str] = ["# Order sheet: ${o.name} revision ${o.rev}", ""]
+    let verdict = if o.refused
+        "REFUSED: no file is written but this sheet.  A placed part has no part number, and a part left to the form's matcher is matched from its comment or its footprint text, which is not what the designer chose.  Give it a number in the symbol field, or list it under `[do_not_place]` in `hardware/gates.toml` with a reason."
+    elif fjcheck.passes(cs)
+        "ready to upload."
+    else
+        "NOT READY: a check below is an error."
+    list.push(out,
+        "Prepared by fab-jlcpcb-nv.  **Nothing has been ordered and no service was called.**  The package is " + verdict)
+    list.push(out, "")
+    list.push(out, "## The board")
+    list.push(out, "")
+    list.push(out, "- Size: ${fjcpl.fixed6(b.width)} by ${fjcpl.fixed6(b.height)} mm")
+    list.push(out, "- Copper layers: ${b.layers}")
+    list.push(out, "- Thickness: ${fjcpl.fixed6(b.thickness)} mm")
+    list.push(out, "- Quantity: " + (if o.qty > 0 then "${o.qty}" else "not chosen"))
+    list.push(out, "")
+    list.push(out, "## The assembly")
+    list.push(out, "")
+    list.push(out,
+        "- Class: ${o.class}${if list.len(o.forced) > 0 then " (forced by ${str.join(list.take(o.forced, 8), ", ")}: only Standard places them)" else ""}")
+    list.push(out, "- Placed parts: ${list.len(rows)} (${top} on top, ${bottom} on the bottom)")
+    list.push(out, "- Bill of materials lines: ${list.len(fjbom.placed(bom))}")
+    list.push(out,
+        "- Left out by the design: ${if list.len(o.not_placed) == 0 then "none" else str.join(o.not_placed, ", ")}")
+    list.push(out,
+        "- Left out by the policy: ${if list.len(o.skipped) == 0 then "none" else str.join(o.skipped, "; ")}")
+    list.push(out, "")
+    list.push(out, "## The files")
+    list.push(out, "")
+    for f in o.files
+        list.push(out, "- `${f}`")
+    list.push(out, "")
+    list.push(out, "## On the web form")
+    list.push(out, "")
+    list.push(out,
+        "1. Open the quote page and enter the size, the layer count, the thickness and the quantity above.  Upload the Gerber zip.")
+    list.push(out,
+        "2. Choose the finish and the mask colour.  Switch on PCB Assembly, choose the assembly side (${side_words(top, bottom)}) and the class ${o.class}.  Do not pay for the board until the assembly parameters are chosen: the manufacturer takes the two together.")
+    list.push(out,
+        "3. Upload `bom.csv` and `cpl.csv` and press Process BOM&CPL.  Review the matched parts: every line carries the part number written in the bill, and a line that shows another number is a finding.")
+    list.push(out, "4. Review the placements in the preview, above all the parts in `corrections.txt`.")
+    list.push(out,
+        "5. Save to the cart, check the details, enter the address and pay.  Those steps are the person's.")
+    list.push(out, "")
+    list.push(out, "## Rotation corrections to review")
+    list.push(out, "")
+    for l in fjcpl.report(rows)
+        list.push(out, "- ${l}")
+    list.push(out, "")
+    list.push(out, "## The checks")
+    list.push(out, "")
+    for l in fjcheck.report(cs)
+        list.push(out, "- ${l}")
+    list.push(out, "")
+    list.push(out, "## Open questions")
+    list.push(out, "")
+    for q in questions(b, o)
+        list.push(out, "- ${q}")
+    list.push(out, "")
+    list.push(out, "## Sources of the tables")
+    list.push(out, "")
+    for s in fjdata.sources()
+        list.push(out, "- ${s}")
+    str.join(out, "\n") + "\n"

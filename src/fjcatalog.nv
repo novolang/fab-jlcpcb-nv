@@ -1,0 +1,123 @@
+// fjcatalog — what JLCPCB's public part pages say about the part numbers
+// of a bill.
+//
+// The package calls no service.  A person saves the public page of each
+// part number once, as `hardware/parts/<number>.html` (the page at
+// `https://jlcpcb.com/partdetail/<number>` is plain HTML), and the package
+// reads those files.  A page names the library the part is in (Basic,
+// Extended or Preferred), the assembly class that places it (`Economic and
+// Standard` or `Standard Only`), the manufacturer part number and the
+// package.  The stock is not on the page and is not read.
+//
+// A part that only Standard assembly places forces the whole order into
+// Standard: on 2026-11-24 the form said so in a window, "Standard PCBA
+// Parts", with a setup fee of $25 for each assembly side and a board
+// enlarged to at least 70 by 70 mm with edge rails.
+
+use std.fs
+use fjbom
+use fjcheck
+use fjcpl
+
+// What a saved part page says.
+pub struct Entry
+    number: Str
+    library: Str
+    assembly: Str
+    mfr: Str
+    package: Str
+
+// The text of the first span that follows the label `label` in the page.
+fn span_after(html: Str, label: Str) -> Str
+    regex.group("${regex.escape(label)}</dt><dd[^>]*><div[^>]*><span[^>]*>([^<]*)</span>", html, 1) ?? ""
+
+// The part page `html` of part `number`, or `None` when the text is not a
+// part page (it names no library).
+//
+// ```novo
+// use fjcatalog
+//
+// fn main() [io]
+//     let page = "<span class=\"detail-info-badge x\">Basic</span><dt>PCBA Type</dt><dd class=\"a\"><div class=\"b\"><span class=\"c\">Economic and Standard</span></div></dd>"
+//     match fjcatalog.parse_page("C1", page)
+//         Some(e) => println("${e.library}, ${e.assembly}")   // Basic, Economic and Standard
+//         None    => println("not a part page")
+// ```
+pub fn parse_page(number: Str, html: Str) -> ?Entry []
+    match regex.group("detail-info-badge[^>]*>(Basic|Extended|Preferred)<", html, 1)
+        None      => None
+        Some(lib) =>
+            Some(Entry { number: number,
+                library: lib,
+                assembly: span_after(html, "PCBA Type"),
+                mfr: span_after(html, "MFR.Part #"),
+                package: span_after(html, "Package") })
+
+// The entries of the saved pages in `dir` for the part numbers `numbers`;
+// a number with no readable page has no entry.
+pub fn load(dir: Str, numbers: [Str]) -> [Entry] [fs]
+    var out: [Entry] = []
+    for n in numbers
+        match fs.read("${dir}/${n}.html")
+            None    => 0
+            Some(h) =>
+                match parse_page(n, h)
+                    Some(e) => list.push(out, e)
+                    None    => 0
+    out
+
+// The distinct part numbers of the placed parts, in the order of the bill.
+pub fn placed_numbers(rows: [Cpl], bom: [BomLine]) -> [Str] []
+    var out: [Str] = []
+    for l in fjbom.placed(bom)
+        if l.part != "" and list.any(l.designators, d => list.any(rows, r => r.designator == str.upper(d)))
+            if not list.contains(out, l.part)
+                list.push(out, l.part)
+    out
+
+// The entry of part number `n`, or an entry with an empty library.
+fn entry_of(entries: [Entry], n: Str) -> Entry
+    var out = Entry { number: n, library: "", assembly: "", mfr: "", package: "" }
+    for e in entries
+        if e.number == n
+            out = e
+    out
+
+// The designators of the placed parts that only Standard assembly places.
+pub fn forcing(rows: [Cpl], bom: [BomLine], entries: [Entry]) -> [Str] []
+    var out: [Str] = []
+    for l in fjbom.placed(bom)
+        if entry_of(entries, l.part).assembly == "Standard Only"
+            for d in l.designators
+                if list.any(rows, r => r.designator == str.upper(d))
+                    list.push(out, d)
+    out
+
+// The checks over the saved pages.  `class` is the class the board alone
+// belongs to.
+pub fn checks(rows: [Cpl], bom: [BomLine], entries: [Entry], class: Str) -> [FjCheck] []
+    let numbers = placed_numbers(rows, bom)
+    let unread = list.filter(numbers, n => entry_of(entries, n).library == "")
+    var missing: [Str] = []
+    if list.len(unread) > 0
+        list.push(missing,
+            "${list.len(unread)} of ${list.len(numbers)} part number(s) have no saved part page in hardware/parts, so their library and assembly class are unknown: ${str.join(list.take(unread, 8), ", ")}")
+    let pages = FjCheck { name: "part-pages",
+        ok: list.len(missing) == 0,
+        severity: "warning",
+        detail: (if list.len(missing) == 0 then "all ${list.len(numbers)} part number(s) have a saved part page" else missing[0]) }
+    let only = forcing(rows, bom, entries)
+    var clash: [Str] = []
+    if list.len(only) > 0 and class == "Economic"
+        list.push(clash,
+            "${str.join(list.take(only, 8), ", ")} only Standard assembly places, and the board alone would be Economic: the order becomes Standard, with a setup fee for each assembly side and a board of at least 70 by 70 mm with edge rails")
+    let forced = FjCheck { name: "part-assembly-class",
+        ok: list.len(clash) == 0,
+        severity: "error",
+        detail: (if list.len(clash) == 0 then (if list.len(only) == 0 then "no placed part is Standard only" else "${str.join(list.take(only, 8), ", ")} only Standard assembly places, and the order is Standard anyway") else clash[0]) }
+    let extended = list.filter(numbers, n => entry_of(entries, n).library == "Extended")
+    let fee = FjCheck { name: "extended-parts",
+        ok: true,
+        severity: "warning",
+        detail: "${list.len(extended)} of ${list.len(numbers)} part number(s) are Extended parts" + (if list.len(extended) == 0 then "" else " (${str.join(list.take(extended, 12), ", ")}); the form charges a loading fee for each and its size is the form's") }
+    [pages, forced, fee]

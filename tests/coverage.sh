@@ -14,7 +14,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG="$(cd "$HERE/.." && pwd)"
 NOVO="${NOVO:-$HOME/.novo/bin/novo}"
 
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/fab-package-nv-cov.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/fab-jlcpcb-nv-cov.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 
 for suite in "$PKG"/tests/*_tests.nv; do

@@ -21,7 +21,7 @@
   "outputs": [
     {
       "path": "board.step",
-      "sha256": "7e14b87ede07ecc4f3db0e3b2711d60beef27934f4e1d6d5f240c9387106725a",
+      "sha256": "208b75f3dbb5c48901c9114c0244b2b17454ca790dc861add591b1c885bfbdea",
       "bytes": 11916
     },
     {
@@ -31,62 +31,62 @@
     },
     {
       "path": "gerber/mini-B_Cu.gbl",
-      "sha256": "fcf31a16f3aaf1675fb20ac9d1f3f9c9566dc22701785504e850de0a7260d38c",
+      "sha256": "eea691e2f54ef60e0856fc062775287ef3e350aa814cd8d7fa26240718d7147a",
       "bytes": 1242
     },
     {
       "path": "gerber/mini-B_Mask.gbs",
-      "sha256": "62acc54f8f6c8ebd6076233fa6de7498de8ad59aa8a0675554fd478b58337666",
+      "sha256": "3b693d5f3a1fbd64d5407c64d4d26b1caac49773888c635c6ea90beaec72fbf5",
       "bytes": 1288
     },
     {
       "path": "gerber/mini-B_Paste.gbp",
-      "sha256": "7dd44ab0a04e8eb37c027ee9c2ae3dca4dee3a0f76e9588f7c718b961a8da3b1",
+      "sha256": "220e2b39ee82390828a03e08bff7dd368a6717a65e02128842083d1f684ca22f",
       "bytes": 449
     },
     {
       "path": "gerber/mini-B_Silkscreen.gbo",
-      "sha256": "8f31bfccb498956fdf7d0e9c1311d875c839c531548bd73ff8af5a5a85b8072a",
+      "sha256": "ed3cd3e0e4d1c35d60b1f599f463fa94692b09d19654b4936a784044be397f46",
       "bytes": 2570
     },
     {
       "path": "gerber/mini-Edge_Cuts.gm1",
-      "sha256": "81bf1a729b9dfe1f415a83565d4da30864f8618d4fd7e744c3fe9c59b4050b07",
+      "sha256": "35518514e8b17241089faa1634d183f6aa61c17eaad460d65fb41a53a67bdb12",
       "bytes": 609
     },
     {
       "path": "gerber/mini-F_Cu.gtl",
-      "sha256": "41d8d8403ef56e58ad8f672219e1a3fe407fa841b41776d64931a629234d8854",
+      "sha256": "92a81199c23283cad350509361c2c912b81cce97c47f126f361ef081b05bc269",
       "bytes": 1338
     },
     {
       "path": "gerber/mini-F_Mask.gts",
-      "sha256": "a5731144a05b2089910098f86e9d1eb9d5cf2a341b1d5a92457c0c4d04700353",
+      "sha256": "c4611398584b81eabab4f782b7818e04c1eab4d78792e59be1e764c3306a6ebe",
       "bytes": 1357
     },
     {
       "path": "gerber/mini-F_Paste.gtp",
-      "sha256": "2d8e642b5def0a23e8bd25bad73ce4f3267f8be6e2027426163bd7e09b201eb4",
+      "sha256": "a258fff46308499cc8c04612c764a3da0193cb90e95970ed2e312848cb322c68",
       "bytes": 449
     },
     {
       "path": "gerber/mini-F_Silkscreen.gto",
-      "sha256": "ee09f2d18d8a3c5f19f8e14e7f6bd026bb0aaaa491ee028c4c775054362fcfdc",
+      "sha256": "f5ed8bb45785278d9bc1b3ecf4361b91663038eefbdbd8b4e31d63b8c650e51d",
       "bytes": 4403
     },
     {
       "path": "gerber/mini-drl_map.pdf",
-      "sha256": "dfc6ce354ba4379b0980fa197c321c3f71800fda1b5a5546e7e4483ff1ff9b36",
+      "sha256": "2aff3084514ab7d1331b552e02bde20349b412151c4bb0502b522202e449480c",
       "bytes": 11865
     },
     {
       "path": "gerber/mini-job.gbrjob",
-      "sha256": "342c9d703897b1f10721ac5ff8149dbbc5d176501c26d8647a3c5931184208a5",
+      "sha256": "ccccce6a3d38c55c447e0f020cd621ff10b3c249306333248eab93d9227e82f2",
       "bytes": 2437
     },
     {
       "path": "gerber/mini.drl",
-      "sha256": "3395de518306e43c9dfeda3f8ad756da6f1a5d668d89163c03d78ef1b6e631d1",
+      "sha256": "07051df613ad00b51fab24b43d85b42cf0ce0881aa8403f1e6cf206bf9397445",
       "bytes": 354
     },
     {
@@ -96,7 +96,7 @@
     },
     {
       "path": "schematic.pdf",
-      "sha256": "a59fbab6646e92bc459cca01d9d395f0bd94174da29f173c6078a392bb37bd15",
+      "sha256": "4b08b5f7d67f860aca94fc004ad8b3726d8d787f7b957e4b1355d1d4458c5088",
       "bytes": 28250
     }
   ]

@@ -1,0 +1,171 @@
+// fj_overlay_tests — the placement file laid over the Gerber copper: the
+// reader of the flashes, and the check on boards written in the test and on
+// the recorded Gerber files of a board whose auxiliary origin is not the
+// page origin.
+
+use std.test
+use std.bytes
+use std.fs
+use fjboard
+use fjcpl
+use fjdata
+use fjoverlay
+
+fn part(ref: Str, side: Str, x: Float, y: Float) -> Part
+    Part { ref: ref,
+        value: "v",
+        name: "L:R_0603",
+        side: side,
+        x: x,
+        y: y,
+        rot: 0.0,
+        cx: x,
+        cy: y,
+        pads: 2,
+        dnp: false,
+        no_pos: false,
+        no_bom: false,
+        keys: [],
+        vals: [],
+        pnum: ["1", "2"],
+        pdx: [-1.0, 1.0],
+        pdy: [0.0, 0.0],
+        pth: [false, false] }
+
+fn board(parts: [Part]) -> FabBoard
+    FabBoard { file: "b",
+        layers: 2,
+        thickness: 1.6,
+        width: 30.0,
+        height: 20.0,
+        aux_x: 0.0,
+        aux_y: 0.0,
+        min_track: 0.0,
+        min_via_drill: 0.0,
+        min_via_size: 0.0,
+        min_pth: 0.0,
+        min_npth: 0.0,
+        min_ring: 0.0,
+        parts: parts }
+
+fn read_text(path: Str) -> Str [fs]
+    fs.read(path) ?? ""
+
+fn flash(x: Float, y: Float, ref: Str, pin: Str) -> Flash
+    Flash { x: x, y: y, ref: ref, pin: pin }
+
+@test
+fn test_the_flashes_of_a_gerber_file_carry_the_pad_they_belong_to()
+    let g = "%FSLAX46Y46*%\n%MOMM*%\nG01*\nD10*\n%TO.P,R1,2,Net*%\n%TO.N,Net*%\nX1500000Y-2000000D03*\nX3000000D03*\n%TD*%\nX9000000Y-9000000D03*\n%TO.P,U4,1*%\nY-4500000D03*\nX1000000Y1000000D02*\nX2000000Y1000000D01*\nD11*\n"
+    let found = fjoverlay.flashes_of(g)
+    test.assert_eq(list.len(found), 3)
+    test.assert_eq(found[0].ref, "R1")
+    test.assert_eq(found[0].pin, "2")
+    test.assert_eq(found[0].x, 1.5)
+    test.assert_eq(found[0].y, -2.0)
+    test.assert_eq(found[1].x, 3.0)
+    test.assert_eq(found[1].y, -2.0)
+    test.assert_eq(found[2].ref, "U4")
+    test.assert_eq(found[2].pin, "1")
+    test.assert_eq(found[2].x, 9.0)
+    test.assert_eq(found[2].y, -4.5)
+
+@test
+fn test_a_file_in_inches_with_fewer_decimals_is_read_in_millimetres()
+    let g = "%FSLAX24Y24*%\n%MOIN*%\n%TO.P,C1,1*%\nX10000Y-20000D03*\n"
+    let found = fjoverlay.flashes_of(g)
+    test.assert_approx(found[0].x, 25.4, 0.0001)
+    test.assert_approx(found[0].y, -50.8, 0.0001)
+    test.assert_eq(list.len(fjoverlay.flashes_of("")), 0)
+    test.assert_eq(list.len(fjoverlay.flashes_of("%TO.P,bad*%\nX1Y1D03*\n")), 0)
+
+@test
+fn test_placements_that_lie_on_their_flashes_pass_and_pin_one_is_counted()
+    let b = board([part("R1", "top", 10.0, 20.0), part("R2", "bottom", 5.0, 5.0)])
+    let rows = fjcpl.rows(b, [])
+    let top = [flash(9.0, -20.0, "R1", "1"), flash(11.0, -20.0, "R1", "2"), flash(0.0, 0.0, "R9", "1")]
+    let bottom = [flash(4.0, -5.0, "R2", "1"), flash(6.0, -5.0, "R2", "2")]
+    let c = fjoverlay.check(b, rows, [top, bottom])
+    test.assert(c.ok)
+    test.assert_eq(c.name, "placement-on-gerber")
+    test.assert_eq(c.detail,
+        "4 pad(s) of 2 placed part(s) lie on their flash in the copper layers within 0.01 mm, pad 1 of 2 of them included; 0 pad(s) are not flashed")
+
+@test
+fn test_a_file_shifted_in_x_and_y_fails_naming_the_pads()
+    let b = board([part("R1", "top", 10.0, 20.0)])
+    let rows = fjcpl.rows(b, [])
+    let shifted = [flash(9.0 + 18.7, -20.0 + 18.6, "R1", "1"), flash(11.0 + 18.7, -20.0 + 18.6, "R1", "2")]
+    let c = fjoverlay.check(b, rows, [shifted, []])
+    test.assert_eq(c.ok, false)
+    test.assert_eq(c.severity, "error")
+    test.assert(str.contains(c.detail, "R1 pad 1: the row puts it at (9, -20), the copper at (27.7, -1.4), 26.37"))
+    test.assert(str.contains(c.detail, "mm away"))
+
+@test
+fn test_a_flip_of_y_is_found_and_a_part_on_the_wrong_side_has_no_flash_to_match()
+    let b = board([part("R1", "top", 10.0, 20.0)])
+    let rows = fjcpl.rows(b, [])
+    let flipped = [flash(9.0, 20.0, "R1", "1"), flash(11.0, 20.0, "R1", "2")]
+    test.assert_eq(fjoverlay.check(b, rows, [flipped, []]).ok, false)
+    let wrong_side = fjoverlay.check(b, rows, [[], [flash(9.0, -20.0, "R1", "1")]])
+    test.assert_eq(wrong_side.ok, false)
+    test.assert(str.contains(wrong_side.detail, "no pad of any placed part has a flash"))
+
+@test
+fn test_pads_that_the_copper_does_not_flash_are_counted_and_left_out()
+    let b = board([part("R1", "top", 10.0, 20.0)])
+    let rows = fjcpl.rows(b, [])
+    let c = fjoverlay.check(b, rows, [[flash(9.0, -20.0, "R1", "1")], []])
+    test.assert(c.ok)
+    test.assert(str.contains(c.detail, "1 pad(s) of 1 placed part(s)"))
+    test.assert(str.contains(c.detail, "1 pad(s) are not flashed"))
+
+@test
+fn test_more_than_six_failing_pads_are_summed_up()
+    var ps: [Part] = []
+    var fl: [Flash] = []
+    for i in 0..5
+        let ref = "R${i + 1}"
+        list.push(ps, part(ref, "top", 10.0 + i as Float, 20.0))
+        list.push(fl, flash(0.0, 0.0, ref, "1"))
+        list.push(fl, flash(0.0, 0.0, ref, "2"))
+    let b = board(ps)
+    let c = fjoverlay.check(b, fjcpl.rows(b, []), [fl, []])
+    test.assert_eq(c.ok, false)
+    test.assert(str.contains(c.detail, "and 4 more"))
+
+@test
+fn test_a_table_offset_is_taken_off_before_the_pads_are_laid_out()
+    let b = board([part("R1", "top", 10.0, 20.0)])
+    let table = [Row { pattern: "^R_0603", rotation: 90.0, dx: 0.5, dy: 0.25 }]
+    let rows = fjcpl.rows(b, table)
+    test.assert_eq(rows[0].x, 10.5)
+    let c = fjoverlay.check(b, rows, [[flash(9.0, -20.0, "R1", "1"), flash(11.0, -20.0, "R1", "2")], []])
+    test.assert(c.ok)
+
+@test
+fn test_the_recorded_gerbers_of_a_board_with_an_auxiliary_origin_match_its_placement() [fs]
+    let dir = "tests/fixtures/rev_aux/hardware"
+    let src = read_text("${dir}/mini.kicad_pcb")
+    match fjboard.read(bytes.from_str(src), "mini.kicad_pcb")
+        Err(e) => test.assert_eq(e.message(), "")
+        Ok(b)  =>
+            test.assert_eq(b.aux_x, 100.0)
+            let rows = fjcpl.rows(b, [])
+            let copper = fjoverlay.read_flashes("${dir}/fab/rev-A/gerber")
+            test.assert(list.len(copper[0]) > 0)
+            test.assert(list.len(copper[1]) > 0)
+            let c = fjoverlay.check(b, rows, copper)
+            test.assert(c.ok)
+            // The same Gerbers read as if they were at the page origin.
+            let absolute = list.map(copper,
+                side => list.map(side, f => Flash { x: f.x + 100.0, y: f.y - 100.0, ref: f.ref, pin: f.pin }))
+            test.assert_eq(fjoverlay.check(b, rows, absolute).ok, false)
+
+@test
+fn test_the_recorded_gerbers_of_a_board_at_the_page_origin_match_too() [fs]
+    let dir = "tests/fixtures/rev_ok/hardware"
+    match fjboard.read(bytes.from_str(read_text("${dir}/mini.kicad_pcb")), "mini.kicad_pcb")
+        Err(e) => test.assert_eq(e.message(), "")
+        Ok(b)  => test.assert(fjoverlay.check(b, fjcpl.rows(b, []), fjoverlay.read_flashes("${dir}/fab/rev-A/gerber")).ok)

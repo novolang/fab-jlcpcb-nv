@@ -1,0 +1,148 @@
+// fjoverlay — the placement file laid over the Gerber copper.
+//
+// A placement file and the Gerber files are only worth sending together
+// when they share one origin and one direction of Y.  KiCad's Gerber files
+// carry the pad that each flash belongs to (the X2 attribute
+// `%TO.P,<reference>,<pad number>*%`), so the check needs no guess: for
+// every placed part it computes where each of the footprint's numbered pads
+// lies from the part's placement row, undoing the corrections the row
+// carries (the table's and the fields' offsets), and looks for the flash
+// of that pad on the copper layer of the part's side.  A pad whose flash is
+// farther than the tolerance from where the row puts it fails.  Pad 1 is
+// one of the pads, so a part turned or mirrored in the row is found there
+// as well.
+//
+// A pad that the copper layer does not flash (a pad drawn as a region)
+// has nothing to compare with and is counted and left out.  The Gerber
+// coordinates are read in the units and with the number of decimals the
+// file states.
+
+use std.fs
+use fjboard
+use fjcheck
+use fjcpl
+
+// One flash of the copper layer: its centre and the pad it belongs to.
+pub struct Flash
+    x: Float
+    y: Float
+    ref: Str
+    pin: Str
+
+// The distance in millimetres within which a pad must lie.
+pub const TOLERANCE = 0.01
+
+// The flashes of the Gerber text `text` that belong to a pad.
+//
+// ```novo
+// use fjoverlay
+//
+// fn main() [io]
+//     let g = "%FSLAX46Y46*%\n%MOMM*%\n%TO.P,R1,2*%\nX1500000Y-2000000D03*\n%TD*%\n"
+//     println("${fjoverlay.flashes_of(g)[0].pin}")   // 2
+// ```
+pub fn flashes_of(text: Str) -> [Flash] []
+    var out: [Flash] = []
+    var decimals = 6
+    var unit = 1.0
+    var ref = ""
+    var pin = ""
+    var x = 0.0
+    var y = 0.0
+    for line in str.split(text, "\n")
+        if str.starts_with(line, "%FSLAX")
+            decimals = str.to_int(str.slice(line, 7, 8)) ?? 6
+        elif str.starts_with(line, "%MOIN")
+            unit = 25.4
+        elif str.starts_with(line, "%TO.P,")
+            let g = regex.groups("^%TO\\.P,([^,*]*),([^,*]*)", line)
+            if list.len(g) == 2
+                ref = g[0]
+                pin = g[1]
+        elif str.starts_with(line, "%TD")
+            ref = ""
+            pin = ""
+        else
+            let g = regex.groups("^(?:X(-?[0-9]+))?(?:Y(-?[0-9]+))?D0([123])\\*", line)
+            if list.len(g) == 3
+                let scale = unit / math.pow(10.0, decimals as Float)
+                if g[0] != ""
+                    x = (str.to_float(g[0]) ?? 0.0) * scale
+                if g[1] != ""
+                    y = (str.to_float(g[1]) ?? 0.0) * scale
+                if g[2] == "3" and ref != ""
+                    list.push(out, Flash { x: x, y: y, ref: str.upper(ref), pin: pin })
+    out
+
+// The flashes of the top and of the bottom copper layer in `dir`, as
+// `[top, bottom]`.
+pub fn read_flashes(dir: Str) -> [[Flash]] [fs]
+    var top: [Flash] = []
+    var bottom: [Flash] = []
+    for n in fs.read_dir(dir)
+        let text = fs.read("${dir}/${n}") ?? ""
+        if str.ends_with(n, ".gtl") or str.ends_with(n, "F_Cu.gbr")
+            for f in flashes_of(text)
+                list.push(top, f)
+        elif str.ends_with(n, ".gbl") or str.ends_with(n, "B_Cu.gbr")
+            for f in flashes_of(text)
+                list.push(bottom, f)
+    [top, bottom]
+
+// Where the row puts pad `i` of the part, `[x, y]` in the file's frame:
+// the position the row started from, plus the pad's distance from the
+// base point of the row.
+fn pad_at(r: Cpl, p: Part, i: Int) -> [Float]
+    [r.x - r.off_x + (p.pdx[i] - r.base_x), r.y - r.off_y - (p.pdy[i] - r.base_y)]
+
+// The check.  `copper` holds the flashes of the top layer and the bottom
+// layer, as `read_flashes` answers.
+pub fn check(b: FabBoard, rows: [Cpl], copper: [[Flash]]) -> FjCheck []
+    var bad: [Str] = []
+    var found = 0
+    var unflashed = 0
+    var pin_one = 0
+    for r in rows
+        let side = if r.layer == "Top"
+            copper[0]
+        else
+            copper[1]
+        let mine = list.filter(side, f => f.ref == r.designator)
+        for p in list.filter(b.parts, q => str.upper(q.ref) == r.designator)
+            for i in 0..list.len(p.pnum)
+                let want = pad_at(r, p, i)
+                let here = list.filter(mine, f => f.pin == p.pnum[i])
+                if list.len(here) == 0
+                    unflashed += 1
+                else
+                    var best = math.infinity()
+                    var bx = 0.0
+                    var by = 0.0
+                    for f in here
+                        let d = math.sqrt((f.x - want[0]) * (f.x - want[0]) + (f.y - want[1]) * (f.y - want[1]))
+                        if d < best
+                            best = d
+                            bx = f.x
+                            by = f.y
+                    if best > TOLERANCE
+                        list.push(bad,
+                            "${r.designator} pad ${p.pnum[i]}: the row puts it at (${fjcpl.fixed6(want[0])}, ${fjcpl.fixed6(want[1])}), the copper at (${fjcpl.fixed6(bx)}, ${fjcpl.fixed6(by)}), ${fjcpl.fixed6(best)} mm away")
+                    else
+                        found += 1
+                        if p.pnum[i] == "1"
+                            pin_one += 1
+    var detail = ""
+    if found == 0 and list.len(bad) == 0
+        list.push(bad,
+            "no pad of any placed part has a flash in the copper layers, so the files cannot be compared")
+    if list.len(bad) > 6
+        detail = str.join(list.take(bad, 6), "; ") + " and ${list.len(bad) - 6} more"
+    else
+        detail = str.join(bad, "; ")
+    if list.len(bad) == 0
+        FjCheck { name: "placement-on-gerber",
+            ok: true,
+            severity: "error",
+            detail: "${found} pad(s) of ${list.len(rows)} placed part(s) lie on their flash in the copper layers within ${fjcpl.fixed6(TOLERANCE)} mm, pad 1 of ${pin_one} of them included; ${unflashed} pad(s) are not flashed" }
+    else
+        FjCheck { name: "placement-on-gerber", ok: false, severity: "error", detail: detail }

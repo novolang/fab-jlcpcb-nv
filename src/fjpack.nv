@@ -1,0 +1,186 @@
+// fjpack — the order package of a revision, written beside it.
+//
+// `prepare` takes a project whose revision has run through
+// hardware-gates-nv and passed: the revision directory holds the Gerbers,
+// the drill files, `bom.csv` and `pos.csv`, and `gates.json` and the
+// manifest say that they are the outputs of the design as it stands.  A
+// revision that does not verify is refused, and so no package is made of
+// a design that failed its gates or changed after them.
+//
+// The package is written to `hardware/fab/<rev>/jlcpcb/`:
+//
+//   <name>-<rev>-gerbers.zip   every file of `gerber/`, stored
+//   bom.csv                    the bill in JLCPCB's columns
+//   cpl.csv                    the placement file
+//   corrections.txt            every rotation and position correction
+//   order-sheet.md             what to enter on the web, the checks, the open questions
+//   package-manifest.json      the files above with their SHA-256
+//
+// A package whose checks hold an error is written all the same, so that
+// the person can read what is wrong, and `Package.ready` is false.  One
+// error stops the package at the sheet: a placed part with no part number.
+// A part left to JLCPCB's matcher is matched from its comment or its
+// footprint text, which is not what the designer chose, so the files for the
+// form are not written; only `order-sheet.md` and the manifest are.  A part
+// is either numbered or listed under `[do_not_place]` in `gates.toml` with
+// its reason, and a listed part is in neither the bill nor the placement
+// file.  No order is placed and no service is called.
+//
+// The part pages saved under `hardware/parts/<number>.html` (see
+// `fjcatalog`) tell the library of each number and whether a part only
+// Standard assembly places forces the order into Standard.
+
+use std.fs
+use std.json
+use std.bytes
+use hgrun
+use hgpolicy
+use hgmanifest
+use fjboard
+use fjbom
+use fjcatalog
+use fjcheck
+use fjcpl
+use fjdata
+use fjfault
+use fjoverlay
+use fjsheet
+use fjzip
+
+// What `prepare` made.
+//
+// `dir` is where the files are, `files` their names relative to `dir`,
+// `checks` the verdicts, `ready` whether no check of severity `error`
+// failed, `rows` the placement rows and `class` the assembly class.
+pub struct Package
+    dir: Str
+    files: [Str]
+    checks: [FjCheck]
+    ready: Bool
+    rows: [Cpl]
+    class: Str
+
+// The board file of a revision, as a path under `root/hardware`, read from
+// the manifest of the gates; the empty string when the manifest names none.
+fn board_of(manifest: Str) -> Str
+    var found = ""
+    let doc = json.parse(manifest) ?? json.object([])
+    for e in json.get_list(doc, "inputs") ?? []
+        let p = json.get_str(e, "path") ?? ""
+        if str.ends_with(p, ".kicad_pcb") and found == ""
+            found = p
+    found
+
+// The project file that goes with a board file.
+fn pro_of(board: Str) -> Str
+    str.slice(board, 0, str.len(board) - 10) + ".kicad_pro"
+
+// The text of the file at `path`, or a fault naming it.
+fn read_text(path: Str) -> Result<Str, FjFault> [fs]
+    match fs.read(path)
+        Some(t) => Ok(t)
+        None    => Err(FjFile(path, "cannot be read"))
+
+// The contents of the files of `dir`, in the order of the names.
+fn gerber_files(dir: Str) -> [Str] [fs]
+    list.sort(list.filter(fs.read_dir(dir), n => fs.is_file("${dir}/${n}")))
+
+// The policy of the project, or the default when there is no file or it
+// does not read.
+fn policy_of(hwdir: Str) -> Policy [fs]
+    match fs.read("${hwdir}/gates.toml")
+        None    => hgpolicy.defaults()
+        Some(t) =>
+            match hgpolicy.parse(t, "gates.toml")
+                Ok(p)  => p
+                Err(_) => hgpolicy.defaults()
+
+// Deletes the files an earlier package of the revision left in `dir`.
+fn clear(dir: Str) [fs]
+    for n in fs.read_dir(dir)
+        if fs.is_file("${dir}/${n}")
+            fs.delete("${dir}/${n}")
+
+// Writes the bytes `data` to the file `path`, replacing it; answers
+// whether it was written.
+fn write_bytes(path: Str, data: Bytes) -> Bool [fs]
+    fs.delete(path)
+    match fs.open_write(path)
+        None     => false
+        Some(fd) =>
+            let failed = fs.write_at(fd, 0, bytes.to_byte_list(data))
+            fs.close(fd)
+            failed == None
+
+// Writes the text `t` to `dir/name` and answers the name.
+fn put(dir: Str, name: Str, t: Str) -> Str [fs]
+    fs.write("${dir}/${name}", t)
+    name
+
+// Prepares the package of revision `rev` of the project under `root`.
+// `name` names the design in the files and `qty` is the number of boards
+// to order, or zero when it is not yet chosen.
+pub fn prepare(root: Str, rev: Str, name: Str, qty: Int) -> Result<Package, FjFault> [fs]
+    let hwdir = "${root}/hardware"
+    let rev_dir = "${hwdir}/fab/${rev}"
+    let problems = hgrun.verify(root, rev)
+    if list.len(problems) > 0
+        return Err(FjRevision(rev, problems))
+    let manifest = read_text("${rev_dir}/${hgmanifest.FILE}")!
+    let board_name = board_of(manifest)
+    if board_name == ""
+        return Err(FjFile("${rev_dir}/${hgmanifest.FILE}", "names no board file among its inputs"))
+    let board_path = "${hwdir}/${board_name}"
+    let b = fjboard.read(fs.read_bytes(board_path) ?? bytes.from_str(""), board_path)!
+    let policy = policy_of(hwdir)
+    let skipped = list.map(policy.do_not_place, s => str.upper(s.ref))
+    let bom = fjbom.without(fjbom.parse(read_text("${rev_dir}/bom.csv")!, policy.part_field, "${rev_dir}/bom.csv")!,
+        skipped)
+    let pos = read_text("${rev_dir}/pos.csv")!
+    let rules = fjcheck.rules_of(fs.read("${hwdir}/${pro_of(board_name)}") ?? "")
+    let rows = list.filter(fjcpl.rows(b, fjdata.rotations()), r => not list.contains(skipped, r.designator))
+    let base = fjcheck.class_of(b, qty)
+    let entries = fjcatalog.load("${hwdir}/parts", fjcatalog.placed_numbers(rows, bom))
+    let forced = fjcatalog.forcing(rows, bom, entries)
+    let class = if list.len(forced) > 0
+        "Standard"
+    else
+        base
+    var cs = fjcheck.run(b, rows, bom, pos, rules, qty)
+    list.push(cs, fjoverlay.check(b, rows, fjoverlay.read_flashes("${rev_dir}/gerber")))
+    for c in fjcatalog.checks(rows, bom, entries, base)
+        list.push(cs, c)
+    let refused = list.any(cs, c => c.name == "part-numbers" and not c.ok)
+    let dir = "${rev_dir}/jlcpcb"
+    fs.mkdir_all(dir)
+    clear(dir)
+    let zip_name = "${name}-${rev}-gerbers.zip"
+    var files: [Str] = []
+    if not refused
+        let gerbers = gerber_files("${rev_dir}/gerber")
+        let contents = list.map(gerbers, g => fs.read_bytes("${rev_dir}/gerber/${g}") ?? bytes.from_str(""))
+        if not write_bytes("${dir}/${zip_name}", fjzip.archive(gerbers, contents))
+            return Err(FjFile("${dir}/${zip_name}", "cannot be written"))
+        list.push(files, zip_name)
+        list.push(files, put(dir, "bom.csv", fjbom.jlc_csv(bom)))
+        list.push(files, put(dir, "cpl.csv", fjcpl.csv(rows)))
+        list.push(files, put(dir, "corrections.txt", str.join(fjcpl.report(rows), "\n") + "\n"))
+    let o = Order { name: name,
+        rev: rev,
+        qty: qty,
+        class: class,
+        files: list.concat(files, ["order-sheet.md", "package-manifest.json"]),
+        not_placed: fjsheet.not_placed(b),
+        skipped: list.map(policy.do_not_place, s => "${s.ref} (${s.reason})"),
+        forced: forced,
+        refused: refused }
+    list.push(files, put(dir, "order-sheet.md", fjsheet.sheet(b, rows, bom, cs, o)))
+    fs.write("${dir}/package-manifest.json",
+        hgmanifest.build("fab-jlcpcb-nv 0.1.0", "", dir, [], dir, files))
+    list.push(files, "package-manifest.json")
+    Ok(Package { dir: dir,
+        files: files,
+        checks: cs,
+        ready: fjcheck.passes(cs) and not refused,
+        rows: rows,
+        class: class })

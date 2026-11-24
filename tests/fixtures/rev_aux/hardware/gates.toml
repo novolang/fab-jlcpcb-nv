@@ -1,0 +1,10 @@
+# Every pin of the schematic carries a no-connect flag, so no pad has a net;
+# the mounting holes have no symbol.
+[severity.drc]
+net_conflict = "ignore"
+
+[[accept]]
+tool = "drc"
+type = "extra_footprint"
+item = "Footprint H"
+reason = "mounting holes have no symbol"

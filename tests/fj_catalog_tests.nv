@@ -1,0 +1,136 @@
+// fj_catalog_tests — the saved pages of JLCPCB's public part pages: what
+// is read from them and the checks over a bill.  The pages under
+// tests/fixtures/parts hold the markup of the real pages for C21190 (a
+// Basic resistor), C23252 (an Extended resistor) and C356849 (the E73
+// module, which only Standard assembly places), cut down to the four
+// facts that are read.
+
+use std.test
+use fjbom
+use fjboard
+use fjcatalog
+use fjcheck
+use fjcpl
+
+fn page(n: Str) -> Str [fs]
+    fs.read("tests/fixtures/parts/${n}.html") ?? ""
+
+fn entries() -> [Entry] [fs]
+    fjcatalog.load("tests/fixtures/parts", ["C21190", "C23252", "C356849", "C1", "C404"])
+
+fn part(ref: Str) -> Part
+    Part { ref: ref,
+        value: "v",
+        name: "L:X",
+        side: "top",
+        x: 1.0,
+        y: 1.0,
+        rot: 0.0,
+        cx: 1.0,
+        cy: 1.0,
+        pads: 0,
+        dnp: false,
+        no_pos: false,
+        no_bom: false,
+        keys: [],
+        vals: [],
+        pnum: [],
+        pdx: [],
+        pdy: [],
+        pth: [] }
+
+fn rows_of(refs: [Str]) -> [Cpl]
+    let b = FabBoard { file: "b",
+        layers: 2,
+        thickness: 1.6,
+        width: 90.0,
+        height: 90.0,
+        aux_x: 0.0,
+        aux_y: 0.0,
+        min_track: 0.0,
+        min_via_drill: 0.0,
+        min_via_size: 0.0,
+        min_pth: 0.0,
+        min_npth: 0.0,
+        min_ring: 0.0,
+        parts: list.map(refs, r => part(r)) }
+    fjcpl.rows(b, [])
+
+fn line(ds: [Str], part_no: Str) -> BomLine
+    BomLine { designators: ds, comment: "c", footprint: "f", part: part_no, dnp: false }
+
+fn named(cs: [FjCheck], name: Str) -> FjCheck
+    var out = FjCheck { name: "missing ${name}", ok: false, severity: "error", detail: "" }
+    for c in cs
+        if c.name == name
+            out = c
+    out
+
+@test
+fn test_a_saved_page_gives_its_library_assembly_class_part_and_package() [fs]
+    match fjcatalog.parse_page("C356849", page("C356849"))
+        None    => test.assert(false)
+        Some(e) =>
+            test.assert_eq(e.number, "C356849")
+            test.assert_eq(e.library, "Extended")
+            test.assert_eq(e.assembly, "Standard Only")
+            test.assert_eq(e.mfr, "E73-2G4M08S1C")
+            test.assert_eq(e.package, "SMD,18x13mm")
+    match fjcatalog.parse_page("C21190", page("C21190"))
+        None    => test.assert(false)
+        Some(e) =>
+            test.assert_eq(e.library, "Basic")
+            test.assert_eq(e.assembly, "Economic and Standard")
+            test.assert_eq(e.mfr, "0603WAF1001T5E")
+    test.assert(fjcatalog.parse_page("C1", page("C1")) == None)
+    test.assert(fjcatalog.parse_page("C1", "") == None)
+
+@test
+fn test_pages_are_read_for_the_numbers_asked_and_a_number_with_no_readable_page_has_none() [fs]
+    let es = entries()
+    test.assert_eq(list.len(es), 3)
+    test.assert_eq(es[0].number, "C21190")
+
+@test
+fn test_the_numbers_of_the_placed_parts_are_listed_once() []
+    let rows = rows_of(["R1", "R2", "U1"])
+    let bom = [line(["R1", "R2"], "C21190"), line(["U1"], "C356849"), line(["H1"], "C77"), line(["X1"], "")]
+    test.assert_eq(fjcatalog.placed_numbers(rows, bom), ["C21190", "C356849"])
+
+@test
+fn test_a_part_that_only_standard_assembly_places_is_named_and_forces_the_class() [fs]
+    let rows = rows_of(["R1", "U1"])
+    let bom = [line(["R1"], "C21190"), line(["U1"], "C356849")]
+    test.assert_eq(fjcatalog.forcing(rows, bom, entries()), ["U1"])
+    let economic = fjcatalog.checks(rows, bom, entries(), "Economic")
+    let c = named(economic, "part-assembly-class")
+    test.assert_eq(c.ok, false)
+    test.assert_eq(c.severity, "error")
+    test.assert(str.contains(c.detail, "U1 only Standard assembly places"))
+    test.assert(str.contains(c.detail, "setup fee for each assembly side"))
+    let standard = fjcatalog.checks(rows, bom, entries(), "Standard")
+    test.assert(named(standard, "part-assembly-class").ok)
+    test.assert(str.contains(named(standard, "part-assembly-class").detail, "the order is Standard anyway"))
+
+@test
+fn test_a_bill_whose_parts_are_not_standard_only_passes_and_counts_the_extended_numbers() [fs]
+    let rows = rows_of(["R1", "R2"])
+    let bom = [line(["R1"], "C21190"), line(["R2"], "C23252")]
+    let cs = fjcatalog.checks(rows, bom, entries(), "Economic")
+    test.assert(named(cs, "part-assembly-class").ok)
+    test.assert_eq(named(cs, "part-assembly-class").detail, "no placed part is Standard only")
+    test.assert_eq(named(cs, "part-pages").detail, "all 2 part number(s) have a saved part page")
+    test.assert_eq(named(cs, "extended-parts").detail,
+        "1 of 2 part number(s) are Extended parts (C23252); the form charges a loading fee for each and its size is the form's")
+    let none = fjcatalog.checks(rows, [line(["R1"], "C21190")], entries(), "Economic")
+    test.assert_eq(named(none, "extended-parts").detail, "0 of 1 part number(s) are Extended parts")
+
+@test
+fn test_a_number_with_no_saved_page_is_a_warning_naming_it() [fs]
+    let rows = rows_of(["R1", "R2", "R3"])
+    let bom = [line(["R1"], "C21190"), line(["R2"], "C99999"), line(["R3"], "C88888")]
+    let c = named(fjcatalog.checks(rows, bom, entries(), "Economic"), "part-pages")
+    test.assert_eq(c.ok, false)
+    test.assert_eq(c.severity, "warning")
+    test.assert(str.contains(c.detail, "2 of 3 part number(s) have no saved part page in hardware/parts"))
+    test.assert(str.contains(c.detail, "C99999, C88888"))

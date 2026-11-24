@@ -20,7 +20,7 @@ APIDOC.md
 # The built binary — `novo pkg build` names it after the package.
 # A library builds none; the line is here for when you add a
 # `main` and it does.  Rename it with the package.
-fab-package-nv
+fab-jlcpcb-nv
 
 # A device build (`novo build --target=<board>`) writes its image
 # and its siblings into the directory the build was started in —
