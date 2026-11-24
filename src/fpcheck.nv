@@ -329,6 +329,9 @@ fn drill_check(b: FabBoard) -> FpCheck
     if b.min_via_drill > 0.0 and b.min_via_size > 0.0 and b.min_via_size - b.min_via_drill < l.via_diameter_over_drill - EPS
         list.push(bad,
             "a via of ${n(b.min_via_size)} mm over a drill of ${n(b.min_via_drill)} is less than ${n(l.via_diameter_over_drill)} larger than its drill")
+    if b.min_via_size > 0.0 and b.min_via_size < l.via_diameter_min - EPS
+        list.push(bad,
+            "the smallest via is ${n(b.min_via_size)} mm across, the least is ${n(l.via_diameter_min)}")
     verdict("drill",
         "error",
         bad,

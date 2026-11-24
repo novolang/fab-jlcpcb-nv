@@ -60,6 +60,7 @@ pub struct Limits
     annular_rec_2: Float
     annular_rec_n: Float
     via_diameter_over_drill: Float
+    via_diameter_min: Float
     npth_drill: Float
     smd_pad: Float
 
@@ -97,9 +98,9 @@ pub fn sources() -> [Str] []
 // The limits of the manufacturer's PCB capabilities page for a 1 oz board.
 //
 // Two-layer boards: tracks and gaps 0.10 mm, drills from 0.15 mm,
-// plated-hole annular ring 0.18 mm at the least and 0.25 mm recommended.
+// plated-pad annular ring 0.18 mm at the least and 0.25 mm recommended.
 // Multilayer boards: 0.09 mm, 0.15 mm, 0.15 mm at the least and 0.20 mm
-// recommended.  A via's diameter is to be 0.1 mm (0.15 mm preferred)
+// recommended.  A via is at least 0.25 mm over a hole of 0.15 mm, and its diameter is to be 0.1 mm (0.15 mm preferred)
 // larger than its drill.  A non-plated hole is 0.5 mm at the least and an
 // SMD pad 0.25 mm square.  Thickness runs from 0.4 to 4.5 mm and the
 // layer count to 32.
@@ -115,7 +116,7 @@ pub fn limits() -> Limits []
         annular_n: 0.15,
         annular_rec_2: 0.25,
         annular_rec_n: 0.20,
-        via_diameter_over_drill: 0.1,
+        via_diameter_over_drill: 0.1, via_diameter_min: 0.25,
         npth_drill: 0.5,
         smd_pad: 0.25 }
 

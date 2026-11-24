@@ -9,9 +9,15 @@ source = "path"
 path = "../kicad-pcb-nv"
 
 [sexpr-nv]
-source = "path"
-path = "../sexpr-nv"
+source = "registry"
+url = "https://registry.novo-lang.org"
+req = "^0.1.0"
+version = "0.1.0"
+hash = "5e8a59a75cef328489979d970e741ca40ee8362f70c83ffcee44219958eeb74d"
 
 [stl-nv]
-source = "path"
-path = "../stl-nv"
+source = "registry"
+url = "https://registry.novo-lang.org"
+req = "^0.1.0"
+version = "0.1.0"
+hash = "be74e9747fd2d3a3c7bf2ff15e9f16dbb6e8ff10b0b159d4f45a7c76771363e0"

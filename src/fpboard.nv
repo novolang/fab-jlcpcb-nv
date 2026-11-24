@@ -2,7 +2,7 @@
 //
 // The board file is read here for the facts a manufacturer asks about:
 // the count of copper layers, the thickness, the size of the outline, the
-// narrowest track, the smallest drills and annular rings, and for every
+// narrowest track, the smallest drills and the annular ring of a plated pad, and for every
 // footprint its reference, name, side, anchor, rotation, do-not-populate
 // flag, fields, and the centre of its pads.  The outline comes from
 // kicad-pcb-nv; the rest is read from the S-expressions with sexpr-nv.
@@ -51,8 +51,9 @@ pub struct Part
 // the narrowest track or zero when the board has none, `min_via_drill`
 // and `min_via_size` those of the smallest via (zero for none),
 // `min_pth` the smallest plated drill of a pad, `min_npth` the smallest
-// non-plated one, and `min_ring` the smallest annular ring of a via or a
-// plated pad.  A zero says none was found.  `aux_x` and `aux_y` are the
+// non-plated one, and `min_ring` the smallest annular ring of a plated
+// pad (a via is held to the drill and diameter limits instead: the capability
+// page gives its diameter as 0.1 mm over its drill and not below 0.25 mm).  A zero says none was found.  `aux_x` and `aux_y` are the
 // auxiliary axis origin, which the placement file is relative to.
 pub struct FabBoard
     file: Str
@@ -237,7 +238,6 @@ fn facts(t: SexprTree, file: Str, thickness: Float, width: Float, height: Float)
             let size = num_at(t, sexprtree.find(t, c, "size"), 1, 0.0)
             via_drill = least(via_drill, drill)
             via_size = least(via_size, size)
-            ring = least(ring, (size - drill) / 2.0)
         elif h == "footprint" or h == "module"
             list.push(parts, part_of(t, c))
             for p in sexprtree.find_all(t, c, "pad")

@@ -13,6 +13,8 @@ with the pre-1.0 rule that a breaking change bumps the MINOR number.
 - `fpcpl`, the placement file with the rotation and position corrections of the Fabrication Toolkit, and `fpdata`, the Toolkit's rotation table and the manufacturer's limits as data with their sources.
 - `fpcheck`, fifteen checks of the design against the manufacturer's published limits and against itself; `fpbom`, `fpboard`, `fpsheet` and `fpzip`.
 
+- A via is held to the page's drill and diameter limits (0.15 mm hole, 0.25 mm across, 0.1 mm over its drill); the annular ring limit is for plated pads, as the page states it.
+
 ### Known
 
 - Nothing was uploaded to the manufacturer.

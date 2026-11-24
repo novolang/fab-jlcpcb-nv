@@ -477,6 +477,7 @@ fn test_the_smallest_drills_and_vias_are_held_to_the_capability_table()
     test.assert(str.contains(d.detail, "smallest plated drill is 0.1 mm"))
     test.assert(str.contains(d.detail, "smallest non-plated drill is 0.3 mm, the least is 0.5"))
     test.assert(str.contains(d.detail, "less than 0.1 larger than its drill"))
+    test.assert(str.contains(d.detail, "the smallest via is 0.15 mm across, the least is 0.25"))
     let one = FabBoard { file: "b",
         layers: 1,
         thickness: 1.6,

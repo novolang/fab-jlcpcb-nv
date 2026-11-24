@@ -26,13 +26,13 @@ novo        = ">= 0.26.1"
 "README.md" = "Preparing and checking the JLCPCB order package of a KiCad revision"
 
 [dependencies]
-# Sibling paths while the three packages are unpublished: the registry has
-# no release of them yet.  `novo pkg publish` refuses a path, so each line
-# becomes a registry range (`^0.1.0`) once its package is uploaded.
+# Sibling paths for the two packages that the registry has no release of
+# yet.  `novo pkg publish` refuses a path, so each becomes a registry range
+# (`^0.1.0`) once its package is uploaded.
 hardware-gates-nv = { path = "../hardware-gates-nv" }
 kicad-pcb-nv = { path = "../kicad-pcb-nv" }
 
-# The dependencies of the two above, named here because a consumer of a
-# path dependency lists the closure itself.
-sexpr-nv = { path = "../sexpr-nv" }
-stl-nv = { path = "../stl-nv" }
+# The dependencies of kicad-pcb-nv, named here because a consumer of a path
+# dependency lists the closure itself; both are on the registry.
+sexpr-nv = "^0.1.0"
+stl-nv = "^0.1.0"

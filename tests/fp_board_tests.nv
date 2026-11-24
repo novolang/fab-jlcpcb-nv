@@ -67,9 +67,9 @@ fn test_tracks_vias_and_drills_give_their_smallest_values()
     test.assert_eq(b.min_via_size, 0.5)
     test.assert_eq(b.min_pth, 0.9)
     test.assert_eq(b.min_npth, 0.7)
-    // The rings: vias (0.6 - 0.3) / 2 = 0.15 and (0.5 - 0.25) / 2 = 0.125;
-    // pads (1.7 - 1.0) / 2 = 0.35 and (1.5 - 0.9) / 2 = 0.3.
-    test.assert_approx(b.min_ring, 0.125, 0.0000001)
+    // The rings of the plated pads: (1.7 - 1.0) / 2 = 0.35 and
+    // (1.5 - 0.9) / 2 = 0.3.  A via is not held to the ring.
+    test.assert_approx(b.min_ring, 0.3, 0.0000001)
 
 @test
 fn test_a_board_with_no_track_via_or_drill_reports_zeros()

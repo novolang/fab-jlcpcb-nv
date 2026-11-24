@@ -78,8 +78,8 @@ The one row of the table with a negative look-ahead, `^SOP-(?!18_)`, is written 
 | board-size, layers, thickness | error | within the manufacturer's range |
 | track-width | error | the narrowest track against the least for the layer count |
 | clearance-setting | warning | the project's rule minimums against the manufacturer's least |
-| drill | error | via, plated and non-plated drills, and a via's diameter over its drill |
-| annular-ring | error | the smallest ring of a via or a plated hole |
+| drill | error | via, plated and non-plated drills, a via's diameter over its drill and not below 0.25 mm |
+| annular-ring | error | the smallest ring of a plated pad (a via is held to the drill check) |
 | rotations | warning | how many parts have a correction to review |
 
 ## Read from JLCPCB's pages
@@ -88,7 +88,7 @@ The figures were read on 23 November 2026 and are a statement of what the pages 
 
 - The columns of the bill, from the manufacturer's sample file `Sample-BOM_JLCSMT.xlsx`: `Comment`, `Designator`, `Footprint`, `JLCPCB Part #`. The sample carries `(optional)` after the last.
 - The columns of the placement file, from https://jlcpcb.com/help/article/pick-place-file-for-pcb-assembly: `Designator`, `Mid X`, `Mid Y`, `Rotation`, `Layer`.
-- The limits, from https://jlcpcb.com/capabilities/pcb-capabilities and https://jlcpcb.com/capabilities/pcb-assembly-capabilities, for a 1 oz board: tracks and gaps 0.10 mm on two layers and 0.09 mm on more, drills from 0.15 mm, plated-hole annular ring 0.18 mm (0.25 mm recommended) on two layers and 0.15 mm (0.20 mm recommended) on more, a non-plated hole from 0.5 mm, thickness 0.4 to 4.5 mm, up to 32 layers, the largest board by layer count. Economic assembly: one side, 2 to 6 layers, 0.8 to 1.6 mm, 10 by 10 to 470 by 500 mm, 2 to 50 pieces. Standard assembly: both sides, 70 by 70 to 460 by 500 mm, 2 to 80000 pieces.
+- The limits, from https://jlcpcb.com/capabilities/pcb-capabilities and https://jlcpcb.com/capabilities/pcb-assembly-capabilities, for a 1 oz board: tracks and gaps 0.10 mm on two layers and 0.09 mm on more, drills from 0.15 mm, plated-pad annular ring 0.18 mm (0.25 mm recommended) on two layers and 0.15 mm (0.20 mm recommended) on more, a via of at least 0.25 mm over a hole of 0.15 mm, a non-plated hole from 0.5 mm, thickness 0.4 to 4.5 mm, up to 32 layers, the largest board by layer count. Economic assembly: one side, 2 to 6 layers, 0.8 to 1.6 mm, 10 by 10 to 470 by 500 mm, 2 to 50 pieces. Standard assembly: both sides, 70 by 70 to 460 by 500 mm, 2 to 80000 pieces.
 - The steps of the order, from https://jlcpcb.com/help/article/how-do-i-place-a-pcba-order.
 
 ## What is not verified

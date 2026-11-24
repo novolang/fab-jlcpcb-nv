@@ -50,6 +50,7 @@ fn test_the_limits_are_the_figures_of_the_capabilities_page()
     test.assert_eq(l.thickness_max, 4.5)
     test.assert_eq(l.smd_pad, 0.25)
     test.assert_eq(l.via_diameter_over_drill, 0.1)
+    test.assert_eq(l.via_diameter_min, 0.25)
 
 @test
 fn test_the_two_assembly_classes_and_the_largest_sizes_by_layer_count()
