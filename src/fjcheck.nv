@@ -224,13 +224,14 @@ fn positions_agree(b: FabBoard, rows: [Cpl], pos: Str) -> FjCheck
 // The assembly class a board belongs to, as its name.
 //
 // Economic takes single-sided placement, 2, 4 or 6 layers, 0.8 to 1.6 mm,
-// and 2 to 50 pieces.  Standard takes both sides and the rest.  A board
-// that has parts on the bottom, or any other need Economic lacks, is
-// Standard.
+// and 2 to 50 pieces.  Standard takes both sides and the rest.  The form
+// offers the bottom side alone in Economic (seen on 2026-11-24); a board
+// with parts on both sides, or any other need Economic lacks, is Standard.
 pub fn class_of(b: FabBoard, qty: Int) -> Str []
     let e = fjdata.assemblies()[0]
-    let bottom = list.any(b.parts, p => p.side == "bottom" and not p.dnp and not p.no_pos)
-    if bottom or b.layers > e.layers_max or b.layers < 2 or b.thickness < e.thickness_min or b.thickness > e.thickness_max or qty > 0 and (qty < e.qty_min or qty > e.qty_max)
+    let placed = list.filter(b.parts, p => not p.dnp and not p.no_pos)
+    let both = list.any(placed, p => p.side == "bottom") and list.any(placed, p => p.side == "top")
+    if both or b.layers > e.layers_max or b.layers < 2 or b.thickness < e.thickness_min or b.thickness > e.thickness_max or qty > 0 and (qty < e.qty_min or qty > e.qty_max)
         "Standard"
     else
         "Economic"
@@ -386,15 +387,17 @@ fn rotations_check(rows: [Cpl]) -> FjCheck
 //
 // `qty` is the number of boards to be ordered, or zero when it is not
 // yet chosen.  `pos` is the text of KiCad's own position file and `rules`
-// the project's rule minimums.
-pub fn run(b: FabBoard, rows: [Cpl], bom: [BomLine], pos: Str, rules: Rules,
+// the project's rule minimums.  `whole` is the board as the file has it
+// and `b` the board as it is ordered, without the parts the person leaves
+// out; KiCad's position file is compared with the first.
+pub fn run(whole: FabBoard, b: FabBoard, rows: [Cpl], bom: [BomLine], pos: Str, rules: Rules,
            qty: Int) -> [FjCheck] []
     [designators_unique(b, bom),
         part_numbers(rows, bom),
         part_number_format(bom),
         bom_cpl_agree(rows, bom),
         footprints_agree(b, bom),
-        positions_agree(b, rows, pos),
+        positions_agree(whole, rows, pos),
         assembly_class(b, qty),
         board_size(b),
         layers_check(b),

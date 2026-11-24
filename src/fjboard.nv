@@ -295,3 +295,22 @@ fn facts(t: SexprTree, file: Str, thickness: Float, width: Float, height: Float)
         min_npth: npth,
         min_ring: ring,
         parts: parts }
+
+// The board without the parts whose references are in `refs` (compared in
+// upper case): the board as it is ordered when the person leaves those
+// parts out.
+pub fn without(b: FabBoard, refs: [Str]) -> FabBoard []
+    FabBoard { file: b.file,
+        layers: b.layers,
+        thickness: b.thickness,
+        width: b.width,
+        height: b.height,
+        aux_x: b.aux_x,
+        aux_y: b.aux_y,
+        min_track: b.min_track,
+        min_via_drill: b.min_via_drill,
+        min_via_size: b.min_via_size,
+        min_pth: b.min_pth,
+        min_npth: b.min_npth,
+        min_ring: b.min_ring,
+        parts: list.filter(b.parts, p => not list.contains(refs, str.upper(p.ref))) }

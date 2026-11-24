@@ -58,7 +58,7 @@ fn no_rules() -> Rules
 
 // The checks of a board with the given bill, position text, rules and quantity.
 fn run(b: FabBoard, bom: [BomLine], pos: Str, r: Rules, qty: Int) -> [FjCheck]
-    fjcheck.run(b, fjcpl.rows(b, []), bom, pos, r, qty)
+    fjcheck.run(b, b, fjcpl.rows(b, []), bom, pos, r, qty)
 
 fn named(cs: [FjCheck], name: Str) -> FjCheck
     var out = FjCheck { name: "missing ${name}", ok: false, severity: "error", detail: "" }
@@ -182,7 +182,9 @@ fn test_the_assembly_class_follows_the_sides_the_layers_the_thickness_and_the_qu
     test.assert_eq(fjcheck.class_of(top, 1), "Standard")
     test.assert_eq(fjcheck.class_of(top, 51), "Standard")
     let bottom = board([part("R1", "L:R", "bottom", 1.0, 1.0)])
-    test.assert_eq(fjcheck.class_of(bottom, 5), "Standard")
+    test.assert_eq(fjcheck.class_of(bottom, 5), "Economic")
+    let both = board([part("R1", "L:R", "bottom", 1.0, 1.0), part("R2", "L:R", "top", 2.0, 2.0)])
+    test.assert_eq(fjcheck.class_of(both, 5), "Standard")
     let eight = FabBoard { file: "b",
         layers: 8,
         thickness: 1.6,
@@ -556,6 +558,7 @@ fn test_a_corrected_rotation_is_a_warning_to_review_and_a_report_line_is_made_fo
     test.assert_eq(named(cs, "rotations").ok, true)
     let rows = fjcpl.rows(b, fjdata.rotations())
     let c = fjcheck.run(b,
+        b,
         rows,
         [line(["U1"], "L:SOIC-8", "C1")],
         "Ref,Val,Package,PosX,PosY,Rot,Side\nU1,v,L:SOIC-8,1,-1,0,top\n",
@@ -568,3 +571,12 @@ fn test_a_corrected_rotation_is_a_warning_to_review_and_a_report_line_is_made_fo
     let failing = run(board(good_parts()), [], "", no_rules(), 0)
     test.assert(not fjcheck.passes(failing))
     test.assert(str.starts_with(fjcheck.report(failing)[1], "ERROR    part-numbers"))
+
+@test
+fn test_a_part_the_person_leaves_out_is_still_in_kicads_file_and_is_not_an_error_there()
+    let whole = board([part("R1", "L:R_0603", "top", 1.0, 1.0), part("R2", "L:R_0603", "top", 2.0, 2.0)])
+    let ordered = fjboard.without(whole, ["R2"])
+    let rows = fjcpl.rows(ordered, [])
+    let cs = fjcheck.run(whole, ordered, rows, [line(["R1"], "L:R_0603", "C1")], good_pos(), no_rules(), 5)
+    test.assert(named(cs, "positions-agree").ok)
+    test.assert_eq(named(cs, "positions-agree").detail, "2 position(s) of KiCad's file are the board's anchors")

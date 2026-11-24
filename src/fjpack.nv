@@ -131,14 +131,15 @@ pub fn prepare(root: Str, rev: Str, name: Str, qty: Int) -> Result<Package, FjFa
     if board_name == ""
         return Err(FjFile("${rev_dir}/${hgmanifest.FILE}", "names no board file among its inputs"))
     let board_path = "${hwdir}/${board_name}"
-    let b = fjboard.read(fs.read_bytes(board_path) ?? bytes.from_str(""), board_path)!
+    let whole = fjboard.read(fs.read_bytes(board_path) ?? bytes.from_str(""), board_path)!
     let policy = policy_of(hwdir)
     let skipped = list.map(policy.do_not_place, s => str.upper(s.ref))
+    let b = fjboard.without(whole, skipped)
     let bom = fjbom.without(fjbom.parse(read_text("${rev_dir}/bom.csv")!, policy.part_field, "${rev_dir}/bom.csv")!,
         skipped)
     let pos = read_text("${rev_dir}/pos.csv")!
     let rules = fjcheck.rules_of(fs.read("${hwdir}/${pro_of(board_name)}") ?? "")
-    let rows = list.filter(fjcpl.rows(b, fjdata.rotations()), r => not list.contains(skipped, r.designator))
+    let rows = fjcpl.rows(b, fjdata.rotations())
     let base = fjcheck.class_of(b, qty)
     let entries = fjcatalog.load("${hwdir}/parts", fjcatalog.placed_numbers(rows, bom))
     let forced = fjcatalog.forcing(rows, bom, entries)
@@ -146,7 +147,7 @@ pub fn prepare(root: Str, rev: Str, name: Str, qty: Int) -> Result<Package, FjFa
         "Standard"
     else
         base
-    var cs = fjcheck.run(b, rows, bom, pos, rules, qty)
+    var cs = fjcheck.run(whole, b, rows, bom, pos, rules, qty)
     list.push(cs, fjoverlay.check(b, rows, fjoverlay.read_flashes("${rev_dir}/gerber")))
     for c in fjcatalog.checks(rows, bom, entries, base)
         list.push(cs, c)
