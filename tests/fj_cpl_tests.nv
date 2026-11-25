@@ -4,6 +4,7 @@
 
 use std.test
 use fjboard
+use fjbom
 use fjcpl
 use fjdata
 
@@ -232,7 +233,7 @@ fn test_the_file_has_the_manufacturers_header_and_a_line_for_each_row()
     test.assert_eq(text, "Designator,Mid X,Mid Y,Rotation,Layer\nR1,1.5,-2,0,Top\nR2,3,-4,90,Bottom\n")
 
 @test
-fn test_the_report_names_each_change_and_counts_the_rows_that_have_none()
+fn test_the_report_has_a_line_for_every_part_with_its_source_and_counts_the_sources()
     let t = [Row { pattern: "^SOIC-", rotation: 270.0, dx: 0.0, dy: 0.0 }]
     let plain = mk("R1", "L:R_0603", "top", 1.0, 1.0, 0.0, 1.0, 1.0)
     let table = mk("U1", "L:SOIC-8", "top", 5.0, 5.0, 0.0, 5.0, 5.0)
@@ -242,10 +243,171 @@ fn test_the_report_names_each_change_and_counts_the_rows_that_have_none()
         ["90", "1,0"])
     let rs = fjcpl.rows(board([plain, table, bottom, moved], 0.0, 0.0), t)
     let lines = fjcpl.report(rs)
-    test.assert_eq(lines[0], "U1: rotation 0 -> 270, Top: table row ^SOIC-: rotation 270")
-    test.assert_eq(lines[1], "C1: rotation 0 -> 180, Bottom: bottom side: rotation is 180 minus the board's")
+    test.assert_eq(list.len(lines), 5)
+    test.assert_eq(lines[0], "R1: rotation 0 -> 0, Top: the board's own value (unverified)")
+    test.assert_eq(lines[1], "U1: rotation 0 -> 270, Top: family row ^SOIC- (adds 270; unverified)")
     test.assert_eq(lines[2],
-        "Q1: rotation 0 -> 90, Top: field rotation offset 90; field position offset 1,0; position is the pad centre, 0.5 mm from the anchor")
-    test.assert_eq(lines[3], "1 row(s) are the board's own values")
+        "C1: rotation 0 -> 180, Bottom: the board's own value (unverified); bottom side: rotation is 180 minus the board's")
+    test.assert_eq(lines[3],
+        "Q1: rotation 0 -> 90, Top: rotation field of the part (adds 90; unverified); field position offset 1,0; position is the pad centre, 0.5 mm from the anchor")
+    test.assert_eq(lines[4],
+        "0 row(s) have a verified part rotation, 0 a proposed one, 0 a part verified on the other side only, 1 a family row, 1 a rotation field and 2 the board's own value")
     test.assert_eq(list.len(fjcpl.rotated(rs)), 2)
-    test.assert_eq(fjcpl.report([])[0], "0 row(s) are the board's own values")
+    test.assert_eq(list.len(fjcpl.unverified(rs)), 4)
+    test.assert_eq(fjcpl.report([])[0],
+        "0 row(s) have a verified part rotation, 0 a proposed one, 0 a part verified on the other side only, 0 a family row, 0 a rotation field and 0 the board's own value")
+
+// A bill whose lines are `[designator, part number]`.
+fn numbers(pairs: [[Str]]) -> [BomLine]
+    list.map(pairs,
+        p => BomLine { designators: [p[0]], comment: "c", footprint: "f", part: p[1], dnp: false })
+
+fn entry(part: Str, rot: Float, status: Str, sides: [Str]) -> PartRow
+    PartRow { part: part,
+        rotation: rot,
+        dx: 0.0,
+        dy: 0.0,
+        status: status,
+        sides: sides,
+        seen: "2026-11-25",
+        note: "n" }
+
+@test
+fn test_a_part_number_with_an_entry_takes_it_and_any_other_part_takes_the_family_row()
+    let fam = [Row { pattern: "^SOT-23", rotation: 180.0, dx: 0.0, dy: 0.0 }]
+    let parts = [entry("C1", 270.0, "verified", ["top"])]
+    let a = mk("U1", "L:SOT-23-5", "top", 1.0, 1.0, 0.0, 1.0, 1.0)
+    let b = mk("U2", "L:SOT-23-5", "top", 2.0, 2.0, 0.0, 2.0, 2.0)
+    let c = mk("U3", "L:SOT-23-5", "top", 3.0, 3.0, 0.0, 3.0, 3.0)
+    let rs = fjcpl.rows_for(board([a, b, c], 0.0, 0.0), fam, parts, numbers([["U1", "C1"], ["U2", "C2"]]))
+    // The part's entry replaces the row of the family: 270, not 180.
+    test.assert_eq(rs[0].rot, 270.0)
+    test.assert_eq(rs[0].source, "verified")
+    test.assert_eq(rs[0].part, "C1")
+    test.assert_eq(rs[0].rule, "")
+    test.assert_eq(rs[0].sides, ["top"])
+    test.assert_eq(rs[0].seen, "2026-11-25")
+    // A number with no entry takes the family row.
+    test.assert_eq(rs[1].rot, 180.0)
+    test.assert_eq(rs[1].source, "family")
+    test.assert_eq(rs[1].rule, "^SOT-23")
+    test.assert_eq(rs[1].part, "C2")
+    // A part that the bill does not hold has no number and takes the family row.
+    test.assert_eq(rs[2].part, "")
+    test.assert_eq(rs[2].source, "family")
+    test.assert_eq(rs[2].rot, 180.0)
+
+@test
+fn test_a_part_entry_moves_the_part_by_its_offset_and_the_number_is_matched_in_upper_case_without_blanks()
+    let parts = [PartRow { part: "C9",
+        rotation: 90.0,
+        dx: 1.0,
+        dy: 2.0,
+        status: "proposed",
+        sides: ["top"],
+        seen: "2026-11-25",
+        note: "n" }]
+    let p = mk("u1", "L:Foo", "top", 10.0, 10.0, 0.0, 10.0, 10.0)
+    let rs = fjcpl.rows_for(board([p], 0.0, 0.0),
+        [],
+        parts,
+        [BomLine { designators: ["U1"], comment: "c", footprint: "f", part: " c9 ", dnp: false }])
+    test.assert_eq(rs[0].rot, 90.0)
+    test.assert_eq(rs[0].x, 11.0)
+    test.assert_eq(rs[0].y, -8.0)
+    test.assert_eq(rs[0].source, "proposed")
+    test.assert(fjcpl.matching_part("", parts) == None)
+    test.assert(fjcpl.matching_part("C10", parts) == None)
+    test.assert((fjcpl.matching_part("C9", parts) ?? parts[0]).status == "proposed")
+
+@test
+fn test_each_source_is_named_on_the_row_and_in_the_report()
+    let fam = [Row { pattern: "^Fam", rotation: 90.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^Zero", rotation: 0.0, dx: 0.0, dy: 0.0 }]
+    let parts = [entry("CV", 180.0, "verified", ["top", "bottom"]),
+        entry("CT", 0.0, "verified", ["top"]),
+        entry("CP", 90.0, "proposed", ["top"])]
+    let v = mk("A1", "L:X", "top", 1.0, 1.0, 0.0, 1.0, 1.0)
+    let vb = mk("A2", "L:X", "bottom", 2.0, 2.0, 0.0, 2.0, 2.0)
+    let t = mk("A3", "L:X", "bottom", 3.0, 3.0, 0.0, 3.0, 3.0)
+    let p = mk("A4", "L:X", "top", 4.0, 4.0, 0.0, 4.0, 4.0)
+    let f = mk("A5", "L:Fam1", "top", 5.0, 5.0, 0.0, 5.0, 5.0)
+    let z = mk("A6", "L:Zero1", "top", 6.0, 6.0, 0.0, 6.0, 6.0)
+    let o = mk("A7", "L:Y", "top", 7.0, 7.0, 0.0, 7.0, 7.0)
+    let fld = with_fields(mk("A8", "L:Y", "top", 8.0, 8.0, 0.0, 8.0, 8.0), ["FT Rotation Offset"], ["90"])
+    let bill = numbers([["A1", "CV"], ["A2", "CV"], ["A3", "CT"], ["A4", "CP"], ["A8", "CV"]])
+    let rs = fjcpl.rows_for(board([v, vb, t, p, f, z, o, fld], 0.0, 0.0), fam, parts, bill)
+    test.assert_eq(list.map(rs, r => r.source),
+        ["verified", "verified", "other-side", "proposed", "family", "family", "board", "field"])
+    let lines = fjcpl.report(rs)
+    test.assert_eq(lines[0],
+        "A1: rotation 0 -> 180, Top: verified part CV (adds 180; seen right on top and bottom on 2026-11-25)")
+    test.assert_eq(lines[1],
+        "A2: rotation 0 -> 0, Bottom: verified part CV (adds 180; seen right on top and bottom on 2026-11-25); bottom side: rotation is 180 minus the board's")
+    test.assert_eq(lines[2],
+        "A3: rotation 0 -> 180, Bottom: part CT (adds 0; seen right on top on 2026-11-25, not on this side; unverified); bottom side: rotation is 180 minus the board's")
+    test.assert_eq(lines[3],
+        "A4: rotation 0 -> 90, Top: proposed part CP (adds 90; the earlier value was drawn wrong on 2026-11-25, this one is not yet seen right)")
+    test.assert_eq(lines[4], "A5: rotation 0 -> 90, Top: family row ^Fam (adds 90; unverified)")
+    test.assert_eq(lines[5], "A6: rotation 0 -> 0, Top: family row ^Zero (adds 0; unverified)")
+    test.assert_eq(lines[6], "A7: rotation 0 -> 0, Top: the board's own value (unverified)")
+    test.assert_eq(lines[7], "A8: rotation 0 -> 270, Top: rotation field of the part (adds 90; unverified)")
+    test.assert_eq(lines[8],
+        "2 row(s) have a verified part rotation, 1 a proposed one, 1 a part verified on the other side only, 2 a family row, 1 a rotation field and 1 the board's own value")
+    test.assert_eq(fjcpl.source_words(rs[0]),
+        "verified part CV (adds 180; seen right on top and bottom on 2026-11-25)")
+    test.assert_eq(fjcpl.source_words(rs[6]), "the board's own value (unverified)")
+    // Only a verified entry on its side is not left for the person to look at.
+    test.assert_eq(list.map(fjcpl.unverified(rs), r => r.designator), ["A3", "A4", "A5", "A6", "A7", "A8"])
+    // A family row that adds nothing and a board's own value need no correction review.
+    test.assert_eq(list.map(fjcpl.rotated(rs), r => r.designator), ["A3", "A4", "A5", "A8"])
+
+@test
+fn test_the_parts_of_the_three_dry_run_kits_are_written_as_the_kits_files_have_them()
+    let parts = fjdata.part_rotations()
+    let fam = fjdata.rotations()
+    // Parts as the kits' boards have them (the rotation in the board file), the part numbers of their bills,
+    // then the rotations the kits' placement files carry and the source of each.
+    let ps = [mk("Q1", "Package_TO_SOT_SMD:SOT-23", "top", 0.0, 0.0, 180.0, 0.0, 0.0),
+        mk("Q2", "Package_TO_SOT_SMD:SOT-23", "top", 0.0, 0.0, 0.0, 0.0, 0.0),
+        mk("U2", "Package_TO_SOT_SMD:SOT-23-5", "top", 0.0, 0.0, -90.0, 0.0, 0.0),
+        mk("D1", "Diode_SMD:D_SOD-323F", "top", 0.0, 0.0, -90.0, 0.0, 0.0),
+        mk("R1", "Resistor_SMD:R_0603_1608Metric", "top", 0.0, 0.0, -90.0, 0.0, 0.0),
+        mk("U3", "Package_TO_SOT_SMD:SOT-23-5", "bottom", 0.0, 0.0, -90.0, 0.0, 0.0),
+        mk("Q3", "Package_TO_SOT_SMD:SOT-23", "bottom", 0.0, 0.0, 0.0, 0.0, 0.0),
+        mk("J4",
+        "Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal",
+        "top",
+        0.0,
+        0.0,
+        180.0,
+        0.0,
+        0.0),
+        mk("U5",
+        "Package_DFN_QFN:QFN-40-1EP_5x5mm_P0.4mm_EP3.6x3.6mm_ThermalVias",
+        "top",
+        0.0,
+        0.0,
+        180.0,
+        0.0,
+        0.0),
+        mk("U6", "Package_DFN_QFN:Texas_RGY_R-PVQFN-N16_EP2.05x2.55mm", "top", 0.0, 0.0, 0.0, 0.0, 0.0),
+        mk("D3", "LED_SMD:LED_Wurth_150044M155260", "top", 0.0, 0.0, 0.0, 0.0, 0.0),
+        mk("U7",
+        "Package_DFN_QFN:QFN-32-1EP_5x5mm_P0.5mm_EP3.6x3.6mm_ThermalVias",
+        "top",
+        0.0,
+        0.0,
+        90.0,
+        0.0,
+        0.0),
+        mk("U1", "BM15x-LGA-45_15.8x10mm", "top", 0.0, 0.0, -90.0, 0.0, 0.0)]
+    let bill = numbers([["Q1", "C347478"], ["Q2", "C347478"], ["U2", "C51118"], ["D1", "C48997863"], ["R1", "C25803"],
+        ["U3", "C32574"], ["Q3", "C347478"], ["J4", "C295747"], ["U5", "C2895249"], ["U6", "C2652978"],
+        ["D3", "C404280"], ["U7", "C7466043"], ["U1", "C9900148376"]])
+    let rs = fjcpl.rows_for(board(ps, 0.0, 0.0), fam, parts, bill)
+    test.assert_eq(list.map(rs, r => r.rot),
+        [0.0, 180.0, 180.0, 270.0, 270.0, 180.0, 0.0, 180.0, 180.0, 270.0, 90.0, 180.0, 270.0])
+    test.assert_eq(list.map(rs, r => r.source),
+        ["verified", "verified", "verified", "verified", "verified", "verified", "verified",
+         "proposed", "proposed", "proposed", "proposed", "family", "board"])

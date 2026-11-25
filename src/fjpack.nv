@@ -139,7 +139,7 @@ pub fn prepare(root: Str, rev: Str, name: Str, qty: Int) -> Result<Package, FjFa
         skipped)
     let pos = read_text("${rev_dir}/pos.csv")!
     let rules = fjcheck.rules_of(fs.read("${hwdir}/${pro_of(board_name)}") ?? "")
-    let rows = fjcpl.rows(b, fjdata.rotations())
+    let rows = fjcpl.rows_for(b, fjdata.rotations(), fjdata.part_rotations(), bom)
     let base = fjcheck.class_of(b, qty)
     let entries = fjcatalog.load("${hwdir}/parts", fjcatalog.placed_numbers(rows, bom))
     let forced = fjcatalog.forcing(rows, bom, entries)

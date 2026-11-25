@@ -101,7 +101,17 @@ fn test_a_revision_that_passed_its_gates_gets_the_files_of_the_order() [io, fs]
     test.assert(str.contains(sheet, "- Left out by the design: H1, H2"))
     test.assert(str.contains(sheet, "- Quantity: 5"))
     let corr = fs.read("${p.dir}/corrections.txt") ?? ""
-    test.assert(str.contains(corr, "R3: rotation 0 -> 180, Bottom"))
+    test.assert(str.contains(corr, "R3: rotation 0 -> 180, Bottom: the board's own value (unverified)"))
+    // The part number of R2 (C21190) has a verified entry, which the bill's number reaches the rows by.
+    test.assert(str.contains(corr,
+        "R2: rotation 90 -> 90, Top: verified part C21190 (adds 0; seen right on top and bottom on 2026-11-25)"))
+    test.assert(str.contains(corr,
+        "1 row(s) have a verified part rotation, 0 a proposed one, 0 a part verified on the other side only, 0 a family row, 0 a rotation field and 2 the board's own value"))
+    test.assert(str.contains(sheet, "## Rotations not verified"))
+    test.assert(str.contains(sheet, "2 of 3 placed parts"))
+    test.assert(str.contains(sheet, "- R1 (C25804), written 0 Top: the board's own value (unverified)"))
+    test.assert(not str.contains(sheet, "- R2 (C21190), written"))
+    test.assert_eq(list.map(p.rows, r => r.source), ["board", "verified", "board"])
 
 @test
 fn test_the_package_manifest_holds_the_hashes_of_the_files_and_verifies() [io, fs]

@@ -115,6 +115,14 @@ pub fn package_of(name: Str) -> Str []
 pub fn part_number_ok(s: Str) -> Bool []
     str.len(s) >= 2 and str.starts_with(s, "C") and (str.to_int(str.slice(s, 1, str.len(s))) ?? -1) >= 0 and not str.contains(s, "-") and not str.contains(s, "+")
 
+// The part number of the line that holds the designator `ref` (compared
+// in upper case), or the empty string when no line holds it.
+pub fn part_of(ls: [BomLine], ref: Str) -> Str []
+    let want = str.upper(ref)
+    match list.find(ls, l => list.any(l.designators, d => str.upper(d) == want))
+        Some(l) => l.part
+        None    => ""
+
 // The lines the manufacturer gets: those not marked do-not-populate.
 pub fn placed(ls: [BomLine]) -> [BomLine] []
     list.filter(ls, l => not l.dnp)

@@ -96,3 +96,12 @@ fn test_designators_taken_out_of_the_bill_leave_the_other_parts_of_the_line_and_
     test.assert_eq(kept[0].designators, ["R1", "r3"])
     test.assert_eq(kept[0].part, "C21190")
     test.assert_eq(list.len(fjbom.without(ls, [])), 2)
+
+@test
+fn test_the_part_number_of_a_designator_is_found_in_upper_case_and_a_designator_not_in_the_bill_has_none()
+    let ls = lines_of(text(["\"C1,C12\",\"100nF\",\"Capacitor_SMD:C_0402_1005Metric\",\"C307331\",\"2\",\"\"",
+        "\"R9\",\"0\",\"Resistor_SMD:R_0603_1608Metric\",\"\",\"1\",\"\""]))
+    test.assert_eq(fjbom.part_of(ls, "C12"), "C307331")
+    test.assert_eq(fjbom.part_of(ls, "c1"), "C307331")
+    test.assert_eq(fjbom.part_of(ls, "R9"), "")
+    test.assert_eq(fjbom.part_of(ls, "U1"), "")

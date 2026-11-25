@@ -3,6 +3,7 @@
 // gave it.
 
 use std.test
+use fjbom
 use fjdata
 
 @test
@@ -50,8 +51,9 @@ fn test_the_look_ahead_row_of_the_source_is_written_as_two_rows_with_the_same_an
 fn test_the_headers_are_those_of_the_manufacturers_sample_files()
     test.assert_eq(fjdata.bom_header(), ["Comment", "Designator", "Footprint", "JLCPCB Part #"])
     test.assert_eq(fjdata.cpl_header(), ["Designator", "Mid X", "Mid Y", "Rotation", "Layer"])
-    test.assert_eq(list.len(fjdata.sources()), 4)
+    test.assert_eq(list.len(fjdata.sources()), 5)
     test.assert(str.contains(fjdata.sources()[0], "7f627b6be76081b962161b9eb9fe3a326a18c915"))
+    test.assert(str.contains(fjdata.sources()[1], "order form on 2026-11-25"))
 
 @test
 fn test_the_limits_are_the_figures_of_the_capabilities_page()
@@ -88,3 +90,39 @@ fn test_the_two_assembly_classes_and_the_largest_sizes_by_layer_count()
     test.assert_eq(fjdata.max_size(4), [663.0, 593.0])
     test.assert_eq(fjdata.max_size(6), [656.0, 586.0])
     test.assert_eq(fjdata.max_size(20), [656.0, 586.0])
+
+@test
+fn test_every_part_entry_has_a_part_number_a_status_a_side_and_a_date_and_none_is_listed_twice()
+    let rows = fjdata.part_rotations()
+    test.assert_eq(list.len(rows), 33)
+    var seen: [Str] = []
+    for r in rows
+        test.assert(fjbom.part_number_ok(r.part))
+        test.assert(r.status == "verified" or r.status == "proposed")
+        test.assert(list.len(r.sides) > 0)
+        for s in r.sides
+            test.assert(s == "top" or s == "bottom")
+        test.assert_eq(r.seen, "2026-11-25")
+        test.assert(r.note != "")
+        test.assert_eq(r.dx, 0.0)
+        test.assert_eq(r.dy, 0.0)
+        test.assert(r.rotation >= 0.0 and r.rotation < 360.0)
+        test.assert(not list.contains(seen, r.part))
+        list.push(seen, r.part)
+
+@test
+fn test_the_proposed_entries_are_the_four_parts_the_preview_drew_wrong_and_every_other_entry_is_verified()
+    let rows = fjdata.part_rotations()
+    let proposed = list.filter(rows, r => r.status == "proposed")
+    test.assert_eq(list.map(proposed, r => r.part), ["C295747", "C2895249", "C2652978", "C404280"])
+    test.assert_eq(list.map(proposed, r => r.rotation), [0.0, 0.0, 270.0, 90.0])
+    test.assert_eq(list.len(list.filter(rows, r => r.status == "verified")), 29)
+    // The parts that stand on both sides of the bottom-side kit were seen on both.
+    let both = list.filter(rows, r => list.len(r.sides) == 2)
+    test.assert_eq(list.len(both), 9)
+    test.assert(list.all(both, r => r.status == "verified"))
+    // The three-lead and five-lead packages, as the two kits showed them.
+    let sot3 = list.find(rows, r => r.part == "C347478")
+    test.assert_eq((sot3 ?? rows[0]).rotation, 180.0)
+    let sot5 = list.find(rows, r => r.part == "C51118")
+    test.assert_eq((sot5 ?? rows[0]).rotation, 270.0)

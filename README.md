@@ -81,19 +81,52 @@ The Gerber files, the drill files and the position file that `hardware-gates-nv`
 | `<name>-<rev>-gerbers.zip` | every file of `gerber/`, stored without compression, with a fixed date, so that the same revision gives the same bytes |
 | `bom.csv` | `Comment,Designator,Footprint,JLCPCB Part #`, one line for each group of parts, the part number taken from the symbol field the policy names (default `LCSC`) |
 | `cpl.csv` | `Designator,Mid X,Mid Y,Rotation,Layer`, in millimetres, the board's auxiliary origin as zero, y upward |
-| `corrections.txt` | every part whose rotation or position is not the board's own, with the rule that changed it |
-| `order-sheet.md` | the PCBA Type to select on the form, the size, layers, assembly class and quantity, what to choose on the web form, the corrections, the checks and the open questions |
+| `corrections.txt` | a line for every placed part: the rotation the board had and the rotation written, the source of the rotation, and any position or side change |
+| `order-sheet.md` | the PCBA Type to select on the form, the parts whose rotation is not verified (or one line that all are), the size, layers, assembly class and quantity, what to choose on the web form, the source of every rotation, the checks and the open questions |
 | `package-manifest.json` | the files above with their SHA-256 |
 
 A package whose checks hold an error is written all the same, so that the person can read what is wrong, and `Package.ready` is false.
 
 ## Placement file
 
-The rows follow the Fabrication Toolkit (https://github.com/bennymeg/Fabrication-Toolkit, Apache-2.0), the maintained public KiCad plugin for this order. A part is placed at the centre of its pads, not at its anchor, with the board's auxiliary origin subtracted and y flipped. A part on the bottom has its rotation taken from 180. The rotation table of the Toolkit, `plugins/transformations.csv` at commit `7f627b6be76081b962161b9eb9fe3a326a18c915`, is carried in `fjdata` row for row, with one row added, `^SOT-23-5` at 270 degrees, before `^SOT-23`; the first row whose pattern matches a footprint's name adds its rotation and moves the part by its offset, turned with the part. A footprint field `FT Rotation Offset` or `FT Position Offset` adds to that, and `FT Origin = Anchor` places the part at its anchor. Every part that changes is listed in `corrections.txt` and the order sheet, so that a person checks it in JLCPCB's preview.
+The rows follow the Fabrication Toolkit (https://github.com/bennymeg/Fabrication-Toolkit, Apache-2.0), the maintained public KiCad plugin for this order. A part is placed at the centre of its pads, not at its anchor, with the board's auxiliary origin subtracted and y flipped. A part on the bottom has its rotation taken from 180. The rotation a part needs on top of that comes from one of two tables, and a footprint field `FT Rotation Offset` or `FT Position Offset` adds to the result; `FT Origin = Anchor` places the part at its anchor.
 
-The row `^SOT-23-5` is there because the Toolkit's 180 degrees for `^SOT-23` draws a five-lead part a quarter turn off in JLCPCB's preview. On 2026-11-25 the preview showed `SOT-23` parts (AO3407A, three leads) right at 180 and `SOT-23-5` parts (AP2112K-3.3, TP4054) a quarter turn off at the 90 degrees that the 180 of the row `^SOT-23` gave, and 180 is right; the addition to KiCad's rotation is therefore 270. The other footprints that `^SOT-23` matches keep 180, as does `^TSOT-23`; see "What is not verified".
+### Rotation by part number
 
-The one row of the table with a negative look-ahead, `^SOP-(?!18_)`, is written as two rows, `^SOP-18_` and `^SOP-`, which give the same answer.
+JLCPCB's preview draws a part from the part's own model, so the rotation a part needs follows its JLCPCB part number, not its footprint family. `fjdata.part_rotations` holds, for a part number, the rotation to add to the board's own and the offset of the part's centre, with a status, the sides of the board on which the preview showed the part, and the date. The status is one of two:
+
+- `verified`: the preview of the order form drew the part right with this value, on the sides named.
+- `proposed`: the preview drew the part wrong with the family value (or, where the family table has no row, with no addition), and the entry holds the value read from the picture that turns the model onto the footprint's pin 1. No preview has shown it right.
+
+An entry is made only for a part that a preview showed. The table holds the parts of the three dry runs of 2026-11-25: 29 verified entries (the three-lead and five-lead SOT-23 parts, a diode, an LED and four resistor values seen on both sides; a USB-C receptacle, a JST SH connector, a SOT-553, a blue LED, a push button, a crystal, an inductor and the capacitors and resistors of the feather board on top) and four proposed ones:
+
+| Part number | Part | Adds | Status | Why |
+| --- | --- | --- | --- | --- |
+| `C295747` | S2B-PH-SM4-TB JST PH connector | 0 | proposed | the family row `^JST_PH_S` (180) drew it half a turn off |
+| `C2895249` | nRF52833 QFN-40 | 0 | proposed | the family row `^QFN-` (90) drew it a quarter turn off |
+| `C2652978` | TXB0106RGYR VQFN-16 | 270 | proposed | with no addition the model's pin 1 sat a quarter turn from the footprint's |
+| `C404280` | MHPA1010RGBDT RGB LED | 90 | proposed | with no addition the model's pin 1 sat a quarter turn from the footprint's |
+
+### Rotation by footprint family
+
+A part number without an entry takes the family table. The table of the Toolkit, `plugins/transformations.csv` at commit `7f627b6be76081b962161b9eb9fe3a326a18c915`, is carried in `fjdata` row for row, with one row added, `^SOT-23-5` at 270 degrees, before `^SOT-23`; the first row whose pattern matches a footprint's name adds its rotation and moves the part by its offset, turned with the part. The one row of the table with a negative look-ahead, `^SOP-(?!18_)`, is written as two rows, `^SOP-18_` and `^SOP-`, which give the same answer.
+
+The row `^SOT-23-5` is there because the Toolkit's 180 degrees for `^SOT-23` draws a five-lead part a quarter turn off in JLCPCB's preview. On 2026-11-25 the preview showed `SOT-23` parts (AO3407A, three leads) right at 180 and `SOT-23-5` parts (AP2112K-3.3, TP4054) a quarter turn off at the 90 degrees that the 180 of the row `^SOT-23` gave, and 180 is right; the addition to KiCad's rotation is therefore 270. The same day showed three more family rows wrong for the parts they matched: `^QFN-`, `^JST_PH_S`, and the absence of a row for the RGB LED and the VQFN-16. The family table is the starting point for a part no preview has shown, and it is not verified; see "What is not verified".
+
+### The source of every rotation
+
+Each placed part has one source for its rotation, named in `corrections.txt` and in the order sheet:
+
+| Source | Meaning | Verified |
+| --- | --- | --- |
+| verified part | a part entry with status `verified`, seen on the side the part is placed on | yes |
+| proposed part | a part entry with status `proposed` | no |
+| part verified on the other side only | a verified part entry whose sides do not include the side of this placement | no |
+| family row | the first matching row of the family table | no |
+| rotation field | the part carries `FT Rotation Offset` (or its fallbacks), a value no preview has seen | no |
+| the board's own value | no entry and no row: the rotation in the board file, turned for the bottom side | no |
+
+The order sheet has a section near the top, `Rotations not verified`, that lists every part whose source is not a verified part, with its part number, the rotation written and the source, and says to check each in the form's preview (Component Placements) before ordering. A board whose every part is verified has one line in its place. The check `rotations` warns for the parts whose rotation a table or a field changed and that no preview has shown right.
 
 ## The checks
 
@@ -111,7 +144,7 @@ The one row of the table with a negative look-ahead, `^SOP-(?!18_)`, is written 
 | clearance-setting | warning | the project's rule minimums against the manufacturer's least |
 | drill | error | via, plated and non-plated drills, a via's diameter over its drill and not below 0.25 mm |
 | annular-ring | error | the smallest ring of a plated pad (a via is held to the drill check) |
-| rotations | warning | how many parts have a correction to review |
+| rotations | warning | how many parts have a proposed, other-side, family or field rotation to review in the preview |
 | placement-on-gerber | error | every numbered pad of every placed part, laid out from its row, lies on its own flash in the copper layers |
 | part-pages | warning | every part number has a saved part page |
 | part-assembly-class | error | no part number is Standard only on a board that is Economic by itself |
@@ -133,9 +166,14 @@ On 2026-11-24 a person put a package of 0.1.0's predecessor through the form by 
 
 On 2026-11-25 a second run showed every placed part on its footprint, the three-lead `SOT-23` parts and the diodes and resistors in the right orientation, and the `SOT-23-5` parts a quarter turn off (fixed in 0.1.1 by the row `^SOT-23-5`). The quote came out as Standard assembly because the PCBA Type was left on the form's own choice; the order sheet names the type to select, and the quote page shows the type that was taken.
 
+The same day the corrected board went through the form on the top side and on the bottom side: the `SOT-23-5` parts were right at 270 on both, and the bottom rule (180 minus the board's rotation, plus the table's) held for the `SOT-23`, `SOT-23-5`, diode and 0603 parts. An 8-layer board of 47 parts then showed that the form draws each part from its own model: of the family rows seen, `^SOT-23` held and `^SOT-23-5` (as first written), `^QFN-` and `^JST_PH_S` did not, and two parts with no row (an RGB LED and a VQFN-16 level shifter) were drawn a quarter turn off. The table of part rotations is the answer.
+
 ## What is not verified
 
-- The rotations of the parts that the preview has not shown. Seen right: `SOT-23` at 180 and `SOT-23-5` at 270 added to KiCad's rotation, and the resistor, LED and diode rows of the board of 2026-11-25. Not seen: `SOT-23-5_HandSoldering`, which `^SOT-23-5` matches and so turns 270 on the ground that its pads are those of `SOT-23-5`; and `SOT-23-6`, `SOT-23-8`, `SOT-23W`, `SOT-23_Handsoldering`, `TSOT-23-5` and the other `TSOT-23` footprints, and `D_SOT-23`, which keep the Toolkit's 180. A part the table does not list can still face the wrong way; the preview is the check.
+- The rotation of every part that has no verified entry. The four proposed entries are the values read from the preview's picture, and each needs one look in the form: select the part, type the written rotation and see whether the model's pin 1 mark sits on the footprint's. The family table is the Toolkit's, with `^SOT-23-5` added; `^QFN-` and `^JST_PH_S` are known to be wrong for one part each, and the rest of its rows are not checked against the preview. A part the tables do not list can face the wrong way; the preview is the check, and the order sheet lists the parts to look at.
+- A verified entry is evidence for one part number on the sides named. The same footprint with another part number can need another value.
+- A part whose model is symmetric (resistors, capacitors, a push button, a four-pin crystal) shows a quarter-turn error and does not show a half-turn error in the preview; its verified entry covers what the preview can show.
+- `SOT-23-5_HandSoldering`, which `^SOT-23-5` matches on the ground that its pads are those of `SOT-23-5`; and `SOT-23-6`, `SOT-23-8`, `SOT-23W`, `SOT-23_Handsoldering`, `TSOT-23-5` and the other `TSOT-23` footprints, and `D_SOT-23`, which keep the Toolkit's 180.
 - Whether JLCPCB takes the plated and non-plated holes in one drill file, as the gates' export produces, was not read on a JLCPCB page; the form took the Gerbers and the drill files of the first dry run without a remark.
 - Stock, price and the size of the extended-part fee are not looked up.
 - Copper weight, surface finish and solder mask colour are not in a board file and are left to the form.

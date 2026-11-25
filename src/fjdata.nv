@@ -1,6 +1,13 @@
 // fjdata — the facts the package carries as data, each with its source.
 //
-// There are three tables.
+// There are four tables.
+//
+// PART ROTATIONS.  The preview of JLCPCB's order form draws a part from
+// the part's own model, so the rotation a part needs follows its JLCPCB
+// part number, not its footprint family.  `part_rotations` holds, for a
+// part number, the rotation to add and the offset, with a status and the
+// date and sides of the preview that showed it.  A part number that has
+// an entry takes it; any other part takes the family table below.
 //
 // ROTATIONS.  KiCad and JLCPCB's assembly machines do not always agree on
 // which way a footprint faces at rotation zero.  The Fabrication Toolkit
@@ -40,6 +47,26 @@ pub struct Row
     rotation: Float
     dx: Float
     dy: Float
+
+// One entry of the table of part rotations.
+//
+// `part` is the JLCPCB part number.  `rotation` is the rotation added to
+// the board's own, in degrees counter-clockwise, and `dx`, `dy` the offset
+// in millimetres, as in a row of the family table.  `status` is `verified`
+// (the preview of the order form drew the part right with this value) or
+// `proposed` (the preview drew the part wrong with the family value, and
+// this is the value read from the picture, not yet seen right).  `sides`
+// are the sides of the board on which the preview showed the part, `seen`
+// the date, and `note` the part in words.
+pub struct PartRow
+    part: Str
+    rotation: Float
+    dx: Float
+    dy: Float
+    status: Str
+    sides: [Str]
+    seen: Str
+    note: Str
 
 // What the manufacturer's pages say a board may be.
 //
@@ -91,6 +118,7 @@ pub fn cpl_header() -> [Str] []
 // The sources of the tables, as lines for a report.
 pub fn sources() -> [Str] []
     ["rotations: Fabrication Toolkit plugins/transformations.csv at 7f627b6be76081b962161b9eb9fe3a326a18c915, Apache-2.0, https://github.com/bennymeg/Fabrication-Toolkit, with the row ^SOT-23-5 added",
+     "part rotations: read from the preview of JLCPCB's order form on 2026-11-25, by part number, with a status for each",
      "bom columns: JLCPCB sample BOM, https://s3.amazonaws.com/helpscout.net/docs/assets/59f1de7804286313cffbb22c/attachments/60ee4acd9e87cb3d0124d284/Sample-BOM_JLCSMT.xlsx",
      "cpl columns: https://jlcpcb.com/help/article/pick-place-file-for-pcb-assembly, updated 2026-09-09",
      "capabilities: https://jlcpcb.com/capabilities/pcb-capabilities and https://jlcpcb.com/capabilities/pcb-assembly-capabilities, read 2026-11-23"]
@@ -164,6 +192,78 @@ pub fn max_size(layers: Int) -> [Float] []
         [663.0, 593.0]
     else
         [656.0, 586.0]
+
+// An entry the preview showed right on `sides` with the rotation `rot`.
+fn seen_right(part: Str, rot: Float, sides: [Str], note: Str) -> PartRow
+    PartRow { part: part,
+        rotation: rot,
+        dx: 0.0,
+        dy: 0.0,
+        status: "verified",
+        sides: sides,
+        seen: "2026-11-25",
+        note: note }
+
+// An entry for a part the preview drew wrong with the family value, with
+// the rotation `rot` read from the picture.
+fn drawn_wrong(part: Str, rot: Float, sides: [Str], note: Str) -> PartRow
+    PartRow { part: part,
+        rotation: rot,
+        dx: 0.0,
+        dy: 0.0,
+        status: "proposed",
+        sides: sides,
+        seen: "2026-11-25",
+        note: note }
+
+// The part rotations: the parts that a preview of JLCPCB's order form
+// showed on 2026-11-25.
+//
+// A `verified` entry was drawn right with its value on the sides named.
+// A `proposed` entry was drawn wrong with the family value (or, where the
+// family table has no row, with no addition); its value is the one that
+// turns the model onto the footprint's pin 1, read from the picture, and
+// has not been seen right.  A part that no preview showed has no entry.
+// The addition is to the rotation in the board file; on the bottom side
+// the package turns that rotation to 180 minus itself first.
+pub fn part_rotations() -> [PartRow] []
+    [
+        seen_right("C347478", 180.0, ["top", "bottom"], "AO3407 P-channel MOSFET, SOT-23"),
+        seen_right("C51118", 270.0, ["top", "bottom"], "AP2112K-3.3 regulator, SOT-23-5"),
+        seen_right("C32574", 270.0, ["top", "bottom"], "TP4054 charger, SOT-23-5"),
+        seen_right("C48997863", 0.0, ["top", "bottom"], "1N5819 diode, SOD-323F"),
+        seen_right("C2286", 0.0, ["top", "bottom"], "red LED, 0603"),
+        seen_right("C25803", 0.0, ["top", "bottom"], "100 kohm resistor, 0603"),
+        seen_right("C23186", 0.0, ["top", "bottom"], "5.1 kohm resistor, 0603"),
+        seen_right("C21190", 0.0, ["top", "bottom"], "1 kohm resistor, 0603"),
+        seen_right("C22976", 0.0, ["top", "bottom"], "2 Mohm resistor, 0603"),
+        seen_right("C165948", 0.0, ["top"], "TYPE-C-31-M-12 USB-C receptacle"),
+        seen_right("C3029343", 0.0, ["top"], "WAFER-SH1.0-4PWB JST SH connector"),
+        seen_right("C2999113", 0.0, ["top"], "TPD3E001DRLR, SOT-553"),
+        seen_right("C125103", 0.0, ["top"], "blue LED, 0603"),
+        seen_right("C139797", 0.0, ["top"], "SKRPACE010 push button"),
+        seen_right("C2682773", 0.0, ["top"], "X201632MOB4SI 32 MHz crystal"),
+        seen_right("C337910", 0.0, ["top"], "2.2 uH inductor, 0603"),
+        seen_right("C307331", 0.0, ["top"], "100 nF capacitor, 0402"),
+        seen_right("C96446", 0.0, ["top"], "10 uF capacitor, 0603"),
+        seen_right("C15849", 0.0, ["top"], "1 uF capacitor, 0603"),
+        seen_right("C23733", 0.0, ["top"], "4.7 uF capacitor, 0402"),
+        seen_right("C23630", 0.0, ["top"], "2.2 uF capacitor, 0603"),
+        seen_right("C126505", 0.0, ["top"], "300 pF capacitor, 0402"),
+        seen_right("C52923", 0.0, ["top"], "1 uF capacitor, 0402"),
+        seen_right("C1547", 0.0, ["top"], "12 pF capacitor, 0402"),
+        seen_right("C1546", 0.0, ["top"], "100 pF capacitor, 0402"),
+        seen_right("C25741", 0.0, ["top"], "100 kohm resistor, 0402"),
+        seen_right("C25778", 0.0, ["top"], "330 kohm resistor, 0402"),
+        seen_right("C25744", 0.0, ["top"], "10 kohm resistor, 0402"),
+        seen_right("C25117", 0.0, ["top"], "470 ohm resistor, 0402"),
+        drawn_wrong("C295747",
+        0.0,
+        ["top"],
+        "S2B-PH-SM4-TB JST PH connector; drawn 180 degrees off with the row ^JST_PH_S"),
+        drawn_wrong("C2895249", 0.0, ["top"], "nRF52833-QDAA-R, QFN-40; drawn 90 degrees off with the row ^QFN-"),
+        drawn_wrong("C2652978", 270.0, ["top"], "TXB0106RGYR, VQFN-16; drawn 90 degrees off with no addition"),
+        drawn_wrong("C404280", 90.0, ["top"], "MHPA1010RGBDT RGB LED; drawn 90 degrees off with no addition")]
 
 // The rotation table: the rows of its source, in order, and one row added.
 //

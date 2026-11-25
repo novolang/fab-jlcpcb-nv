@@ -50,7 +50,7 @@ pub fn questions(b: FabBoard, o: Order) -> [Str] []
     list.push(out,
         "Does the manufacturer take plated and non-plated holes in one drill file?  The article's steps produce one; not read on a manufacturer page.")
     list.push(out,
-        "Are the rotations right?  The table is the Fabrication Toolkit's.  The preview after `Process BOM&CPL` shows each part; correct a part there or give it a rotation field and run again.")
+        "Are the rotations right?  A part number with an entry in the table of part rotations takes it; any other part takes the Fabrication Toolkit's table by footprint family.  The preview after `Process BOM&CPL` shows each part; correct a part there or give it a rotation field and run again.")
     list.push(out,
         "Is every part in stock?  The public part pages do not show the stock; the form's list of matched parts does (a column of shortages).")
     list.push(out,
@@ -64,6 +64,26 @@ pub fn questions(b: FabBoard, o: Order) -> [Str] []
     if list.len(o.skipped) > 0
         list.push(out,
             "${list.len(o.skipped)} part(s) are left out by the policy: ${str.join(list.take(o.skipped, 12), "; ")}.  Is that what is meant?")
+    out
+
+// The section near the top of the sheet that names the parts whose
+// rotation no preview has shown right with the value written, or the one
+// line that says every part's rotation is verified.
+fn unverified_section(rows: [Cpl]) -> [Str]
+    let unchecked = fjcpl.unverified(rows)
+    if list.len(rows) == 0
+        return []
+    if list.len(unchecked) == 0
+        return ["**Every placed part's rotation is verified:** the preview of the order form drew each of the ${list.len(rows)} parts right with the value written.",
+            ""]
+    var out: [Str] = ["## Rotations not verified", ""]
+    list.push(out,
+        "${list.len(unchecked)} of ${list.len(rows)} placed parts have a rotation that no preview of the order form has shown right with the value written.  Check each in the form's preview (Component Placements) before ordering: select the part, compare its pin 1 mark with the footprint's, and correct the rotation there if it is wrong.")
+    list.push(out, "")
+    for r in unchecked
+        list.push(out,
+            "- ${r.designator} (${if r.part == "" then "no part number" else r.part}), written ${fjcpl.fixed6(r.rot)} ${r.layer}: ${fjcpl.source_words(r)}")
+    list.push(out, "")
     out
 
 // The assembly side the form is told, in words.
@@ -92,6 +112,8 @@ pub fn sheet(b: FabBoard, rows: [Cpl], bom: [BomLine], cs: [FjCheck], o: Order) 
     list.push(out,
         "**PCBA Type on the form: ${o.class}.**  Select it yourself under PCB Assembly.  The form may preselect the other type, and a quote taken with the type left alone was priced as Standard assembly.  Read the type again on the quote page before the price.")
     list.push(out, "")
+    for l in unverified_section(rows)
+        list.push(out, l)
     list.push(out, "## The board")
     list.push(out, "")
     list.push(out, "- Size: ${fjcpl.fixed6(b.width)} by ${fjcpl.fixed6(b.height)} mm")
@@ -123,11 +145,12 @@ pub fn sheet(b: FabBoard, rows: [Cpl], bom: [BomLine], cs: [FjCheck], o: Order) 
         "2. Choose the finish and the mask colour.  Switch on PCB Assembly, choose the assembly side (${side_words(top, bottom)}) and the class ${o.class}.  Do not pay for the board until the assembly parameters are chosen: the manufacturer takes the two together.")
     list.push(out,
         "3. Upload `bom.csv` and `cpl.csv` and press Process BOM&CPL.  Review the matched parts: every line carries the part number written in the bill, and a line that shows another number is a finding.")
-    list.push(out, "4. Review the placements in the preview, above all the parts in `corrections.txt`.")
+    list.push(out,
+        "4. Review the placements in the preview, above all the parts named as not verified near the top of this sheet.  `corrections.txt` gives the source of every rotation.")
     list.push(out,
         "5. Save to the cart, check the details, enter the address and pay.  Those steps are the person's.")
     list.push(out, "")
-    list.push(out, "## Rotation corrections to review")
+    list.push(out, "## Rotation of every placed part")
     list.push(out, "")
     for l in fjcpl.report(rows)
         list.push(out, "- ${l}")

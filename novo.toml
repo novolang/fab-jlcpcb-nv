@@ -11,6 +11,7 @@ stability   = "experimental"
 # `host`: the package reads a revision directory and writes the package
 # beside it.
 layer       = "host"
+host_only   = true
 
 category    = "tooling"
 

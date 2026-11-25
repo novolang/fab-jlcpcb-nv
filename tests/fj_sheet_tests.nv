@@ -5,6 +5,7 @@ use fjboard
 use fjbom
 use fjcheck
 use fjcpl
+use fjdata
 use fjsheet
 
 fn part(ref: Str, side: Str, dnp: Bool, no_pos: Bool) -> Part
@@ -161,3 +162,107 @@ fn test_a_board_with_parts_on_the_bottom_only_is_ordered_on_the_bottom_side()
     let b = board(90.0, [part("R1", "bottom", false, false)])
     let t = fjsheet.sheet(b, fjcpl.rows(b, []), bom(), [], order(5, "Standard", []))
     test.assert(str.contains(t, "choose the assembly side (bottom)"))
+
+// A part named `ref` of the footprint `name` on the top side.
+fn named_part(ref: Str, name: Str, rot: Float) -> Part
+    Part { ref: ref,
+        value: "v",
+        name: name,
+        side: "top",
+        x: 1.0,
+        y: 1.0,
+        rot: rot,
+        cx: 1.0,
+        cy: 1.0,
+        pads: 2,
+        dnp: false,
+        no_pos: false,
+        no_bom: false,
+        keys: [],
+        vals: [], pnum: [], pdx: [], pdy: [], pth: [] }
+
+fn numbered(pairs: [[Str]]) -> [BomLine]
+    list.map(pairs,
+        p => BomLine { designators: [p[0]], comment: "c", footprint: "f", part: p[1], dnp: false })
+
+@test
+fn test_the_sheet_names_near_the_top_each_part_whose_rotation_is_not_verified_and_says_what_to_do()
+    let b = board(90.0, [named_part("Q1", "Package_TO_SOT_SMD:SOT-23", 180.0),
+        named_part("J4", "Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal", 180.0),
+        named_part("U7", "Package_DFN_QFN:QFN-32-1EP_5x5mm_P0.5mm_EP3.6x3.6mm_ThermalVias", 90.0),
+        named_part("U1", "BM15x-LGA-45_15.8x10mm", 270.0),
+        named_part("D1", "LED_SMD:LED_0603_1608Metric", 0.0)])
+    let bill = numbered([["Q1", "C347478"], ["J4", "C295747"], ["U7", "C7466043"], ["U1", "C9900148376"]])
+    let rows = fjcpl.rows_for(b, fjdata.rotations(), fjdata.part_rotations(), bill)
+    let t = fjsheet.sheet(b, rows, bom(), [], order(5, "Standard", []))
+    let lines = str.split(t, "\n")
+    test.assert_eq(lines[6], "## Rotations not verified")
+    test.assert_eq(lines[8],
+        "4 of 5 placed parts have a rotation that no preview of the order form has shown right with the value written.  Check each in the form's preview (Component Placements) before ordering: select the part, compare its pin 1 mark with the footprint's, and correct the rotation there if it is wrong.")
+    test.assert_eq(lines[10],
+        "- J4 (C295747), written 180 Top: proposed part C295747 (adds 0; the earlier value was drawn wrong on 2026-11-25, this one is not yet seen right)")
+    test.assert_eq(lines[11], "- U7 (C7466043), written 180 Top: family row ^QFN- (adds 90; unverified)")
+    test.assert_eq(lines[12], "- U1 (C9900148376), written 270 Top: the board's own value (unverified)")
+    test.assert_eq(lines[13], "- D1 (no part number), written 0 Top: the board's own value (unverified)")
+    test.assert_eq(lines[15], "## The board")
+    test.assert(not str.contains(t, "- Q1 (C347478), written"))
+    // The corrections section names the source of every part, the verified one too.
+    test.assert(str.contains(t, "## Rotation of every placed part"))
+    test.assert(str.contains(t,
+        "- Q1: rotation 180 -> 0, Top: verified part C347478 (adds 180; seen right on top and bottom on 2026-11-25)"))
+    test.assert(str.contains(t, "above all the parts named as not verified near the top of this sheet"))
+
+@test
+fn test_a_part_verified_on_the_other_side_only_is_named_as_not_verified()
+    let b = board(90.0, [Part { ref: "U6",
+        value: "v",
+        name: "Package_DFN_QFN:Texas_RGY_R-PVQFN-N16_EP2.05x2.55mm",
+        side: "bottom",
+        x: 1.0,
+        y: 1.0,
+        rot: 0.0,
+        cx: 1.0,
+        cy: 1.0,
+        pads: 2,
+        dnp: false,
+        no_pos: false,
+        no_bom: false,
+        keys: [],
+        vals: [], pnum: [], pdx: [], pdy: [], pth: [] },
+        named_part("C12", "Capacitor_SMD:C_0402_1005Metric", 0.0)])
+    let parts = [PartRow { part: "C2652978",
+        rotation: 270.0,
+        dx: 0.0,
+        dy: 0.0,
+        status: "verified",
+        sides: ["top"],
+        seen: "2026-11-25",
+        note: "n" }]
+    let rows = fjcpl.rows_for(b, [], parts, numbered([["U6", "C2652978"]]))
+    let t = fjsheet.sheet(b, rows, bom(), [], order(5, "Standard", []))
+    test.assert(str.contains(t,
+        "- U6 (C2652978), written 90 Bottom: part C2652978 (adds 270; seen right on top on 2026-11-25, not on this side; unverified)"))
+    test.assert(str.contains(t, "2 of 2 placed parts"))
+
+@test
+fn test_a_board_whose_every_rotation_is_verified_says_so_in_one_line_and_has_no_section()
+    let b = board(90.0, [named_part("Q1", "Package_TO_SOT_SMD:SOT-23", 180.0),
+        named_part("U2", "Package_TO_SOT_SMD:SOT-23-5", 270.0)])
+    let rows = fjcpl.rows_for(b,
+        fjdata.rotations(),
+        fjdata.part_rotations(),
+        numbered([["Q1", "C347478"], ["U2", "C51118"]]))
+    let t = fjsheet.sheet(b, rows, bom(), [], order(5, "Standard", []))
+    let lines = str.split(t, "\n")
+    test.assert_eq(lines[6],
+        "**Every placed part's rotation is verified:** the preview of the order form drew each of the 2 parts right with the value written.")
+    test.assert_eq(lines[8], "## The board")
+    test.assert(not str.contains(t, "## Rotations not verified"))
+
+@test
+fn test_a_sheet_with_no_placed_part_has_no_rotation_section_or_line()
+    let b = board(90.0, [])
+    let t = fjsheet.sheet(b, [], bom(), [], order(5, "Standard", []))
+    test.assert(not str.contains(t, "Rotations not verified"))
+    test.assert(not str.contains(t, "rotation is verified"))
+    test.assert_eq(str.split(t, "\n")[6], "## The board")

@@ -568,6 +568,29 @@ fn test_a_corrected_rotation_is_a_warning_to_review_and_a_report_line_is_made_fo
         "1 placed part(s) have a rotation correction to review in the manufacturer's preview: U1")
     test.assert_eq(fjcheck.report(c)[14],
         "warning  rotations  1 placed part(s) have a rotation correction to review in the manufacturer's preview: U1")
+    // A part number with a verified entry is not a correction to review, and a proposed one is.
+    let verified = [PartRow { part: "C1",
+        rotation: 270.0,
+        dx: 0.0,
+        dy: 0.0,
+        status: "verified",
+        sides: ["top"],
+        seen: "2026-11-25",
+        note: "n" }]
+    let proposed = [PartRow { part: "C1",
+        rotation: 270.0,
+        dx: 0.0,
+        dy: 0.0,
+        status: "proposed",
+        sides: ["top"],
+        seen: "2026-11-25",
+        note: "n" }]
+    let bill = [line(["U1"], "L:SOIC-8", "C1")]
+    let pos = "Ref,Val,Package,PosX,PosY,Rot,Side\nU1,v,L:SOIC-8,1,-1,0,top\n"
+    let ok = fjcheck.run(b, b, fjcpl.rows_for(b, fjdata.rotations(), verified, bill), bill, pos, no_rules(), 0)
+    test.assert_eq(named(ok, "rotations").ok, true)
+    let prop = fjcheck.run(b, b, fjcpl.rows_for(b, [], proposed, bill), bill, pos, no_rules(), 0)
+    test.assert_eq(named(prop, "rotations").ok, false)
     let failing = run(board(good_parts()), [], "", no_rules(), 0)
     test.assert(not fjcheck.passes(failing))
     test.assert(str.starts_with(fjcheck.report(failing)[1], "ERROR    part-numbers"))

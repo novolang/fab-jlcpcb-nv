@@ -13,21 +13,29 @@
 //     since the board's Y grows downward.
 //   - A part on the bottom has its rotation turned to `180 - rotation`, as
 //     the manufacturer expects it seen from above the part.
-//   - The first row of the rotation table whose pattern matches the
-//     footprint's name adds its rotation, and its offset moves the
-//     position by `(dx, dy)` turned by the footprint's rotation.  The
-//     match is made against the part of the name after the library, unless
-//     the pattern itself holds a colon.
+//   - The part's JLCPCB part number, when `fjdata.part_rotations` has an
+//     entry for it, gives the rotation to add and the offset.  Any other
+//     part takes the first row of the family table whose pattern matches
+//     the footprint's name.  Either way the offset moves the position by
+//     `(dx, dy)` turned by the footprint's rotation.  The family match is
+//     made against the part of the name after the library, unless the
+//     pattern itself holds a colon.
 //   - The fields `FT Rotation Offset` (fallbacks `Rotation Offset` and
 //     `RotOffset`), in degrees, and `FT Position Offset` (fallbacks
 //     `Position Offset` and `PosOffset`), as `x,y` in millimetres, add the
 //     person's own corrections.
 //   - The rotation is taken modulo 360.
 //
+// Each row says which source its rotation has: a verified part entry, a
+// proposed part entry, a family row, a rotation field, or the board's own
+// value.  Only a verified part entry is a rotation that a preview of the
+// order form has shown right.
+//
 // A part with the attribute `dnp` or `exclude_from_pos_files` is not
 // placed and has no row.  The layer column is `Top` or `Bottom`.
 
 use fjboard
+use fjbom
 use fjdata
 use kpcbgeom
 
@@ -50,6 +58,10 @@ pub struct Cpl
     layer: Str
     kicad_rot: Float
     shift: Float
+    part: Str
+    source: Str
+    sides: [Str]
+    seen: Str
     rule: Str
     table_rot: Float
     manual_rot: Float
@@ -104,6 +116,15 @@ pub fn matching_row(name: Str, table: [Row]) -> ?Row []
             else
                 list.find(table, r => regex.is_match(r.pattern, lib))
 
+// The entry of the table of part rotations for the part number `part`, or
+// `None`; the empty number has none.
+pub fn matching_part(part: Str, parts: [PartRow]) -> ?PartRow []
+    let want = str.upper(str.trim(part))
+    if want == ""
+        None
+    else
+        list.find(parts, r => str.upper(r.part) == want)
+
 // The number in the first of the fields `keys` that the part has, or
 // `fallback`.
 fn number_field(p: Part, keys: [Str], fallback: Float) -> Float
@@ -130,8 +151,9 @@ fn pair_field(p: Part, keys: [Str]) -> [Float]
                 out = [str.to_float(str.trim(halves[0])) ?? 0.0, str.to_float(str.trim(halves[1])) ?? 0.0]
     out
 
-// The placement row of a part that is placed.
-fn row_of(p: Part, b: FabBoard, table: [Row]) -> Cpl
+// The placement row of a part that is placed, whose part number is
+// `number`.
+fn row_of(p: Part, b: FabBoard, table: [Row], parts: [PartRow], number: Str) -> Cpl
     let anchor = fjboard.field(p, "FT Origin") == "Anchor" or fjboard.field(p, "Origin") == "Anchor"
     let px = if anchor
         p.x
@@ -141,16 +163,28 @@ fn row_of(p: Part, b: FabBoard, table: [Row]) -> Cpl
         p.y
     else
         p.cy
-    let rule = matching_row(p.name, table)
-    let table_rot = match rule
-        Some(r) => r.rotation
-        None    => 0.0
-    let table_dx = match rule
-        Some(r) => r.dx
-        None    => 0.0
-    let table_dy = match rule
-        Some(r) => r.dy
-        None    => 0.0
+    let entry = matching_part(number, parts)
+    let family = match entry
+        Some(_) => None
+        None    => matching_row(p.name, table)
+    let table_rot = match entry
+        Some(e) => e.rotation
+        None    =>
+            match family
+                Some(r) => r.rotation
+                None    => 0.0
+    let table_dx = match entry
+        Some(e) => e.dx
+        None    =>
+            match family
+                Some(r) => r.dx
+                None    => 0.0
+    let table_dy = match entry
+        Some(e) => e.dy
+        None    =>
+            match family
+                Some(r) => r.dy
+                None    => 0.0
     let manual = pair_field(p, ["FT Position Offset", "Position Offset", "PosOffset"])
     let dx = table_dx + manual[0]
     let dy = table_dy + manual[1]
@@ -172,9 +206,34 @@ fn row_of(p: Part, b: FabBoard, table: [Row]) -> Cpl
         p.rot
     let total = base + table_rot + manual_rot
     let wrapped = total - 360.0 * math.floor(total / 360.0)
-    let name = match rule
+    let name = match family
         Some(r) => r.pattern
         None    => ""
+    let sides = match entry
+        Some(e) => e.sides
+        None    => []
+    let seen = match entry
+        Some(e) => e.seen
+        None    => ""
+    let side = if bottom
+        "bottom"
+    else
+        "top"
+    let source = if manual_rot != 0.0
+        "field"
+    else
+        match entry
+            Some(e) =>
+                if e.status == "proposed"
+                    "proposed"
+                elif list.contains(e.sides, side)
+                    "verified"
+                else
+                    "other-side"
+            None    =>
+                match family
+                    Some(_) => "family"
+                    None    => "board"
     Cpl { designator: str.upper(p.ref),
         x: px - b.aux_x + ox,
         y: 0.0 - (py - b.aux_y) + oy,
@@ -182,6 +241,10 @@ fn row_of(p: Part, b: FabBoard, table: [Row]) -> Cpl
         layer: (if bottom then "Bottom" else "Top"),
         kicad_rot: p.rot,
         shift: kpcbgeom.dist(Pt { x: p.x, y: p.y }, Pt { x: p.cx, y: p.cy }),
+        part: str.trim(number),
+        source: source,
+        sides: sides,
+        seen: seen,
         rule: name,
         table_rot: table_rot,
         manual_rot: manual_rot,
@@ -192,12 +255,20 @@ fn row_of(p: Part, b: FabBoard, table: [Row]) -> Cpl
         base_x: px - p.x,
         base_y: py - p.y }
 
-// The rows of the parts that are placed, in the board file's order.
+// The rows of the parts that are placed, in the board file's order, with
+// the family table `table` alone: no part has a part number.
 pub fn rows(b: FabBoard, table: [Row]) -> [Cpl] []
+    rows_for(b, table, [], [])
+
+// The rows of the parts that are placed, in the board file's order.  The
+// part number of each is read from the bill `bom`; a part number that has
+// an entry in `parts` takes it, and any other part takes the family
+// table `table`.
+pub fn rows_for(b: FabBoard, table: [Row], parts: [PartRow], bom: [BomLine]) -> [Cpl] []
     var out: [Cpl] = []
     for p in b.parts
         if not p.dnp and not p.no_pos
-            list.push(out, row_of(p, b, table))
+            list.push(out, row_of(p, b, table, parts, fjbom.part_of(bom, p.ref)))
     out
 
 // The text of the placement file: the header, then a line for each row,
@@ -208,41 +279,64 @@ pub fn csv(rs: [Cpl]) -> Str []
         list.push(lines, "${r.designator},${fixed6(r.x)},${fixed6(r.y)},${fixed6(r.rot)},${r.layer}")
     str.join(lines, "\n") + "\n"
 
-// What was done to the row, in words, or the empty string when its values
-// are the board's own.
+// The sides of a part entry in words: `top`, `bottom` or `top and bottom`.
+fn sides_words(sides: [Str]) -> Str
+    str.join(sides, " and ")
+
+// What the row's rotation rests on, in words.
+pub fn source_words(r: Cpl) -> Str []
+    if r.source == "verified"
+        "verified part ${r.part} (adds ${fixed6(r.table_rot)}; seen right on ${sides_words(r.sides)} on ${r.seen})"
+    elif r.source == "other-side"
+        "part ${r.part} (adds ${fixed6(r.table_rot)}; seen right on ${sides_words(r.sides)} on ${r.seen}, not on this side; unverified)"
+    elif r.source == "proposed"
+        "proposed part ${r.part} (adds ${fixed6(r.table_rot)}; the earlier value was drawn wrong on ${r.seen}, this one is not yet seen right)"
+    elif r.source == "family"
+        "family row ${r.rule} (adds ${fixed6(r.table_rot)}; unverified)"
+    elif r.source == "field"
+        "rotation field of the part (adds ${fixed6(r.manual_rot)}; unverified)"
+    else
+        "the board's own value (unverified)"
+
+// What else was done to the row, in words.
 fn changes(r: Cpl) -> [Str]
     var out: [Str] = []
     if r.layer == "Bottom"
         list.push(out, "bottom side: rotation is 180 minus the board's")
-    if r.rule != ""
-        list.push(out, "table row ${r.rule}: rotation ${fixed6(r.table_rot)}")
-    if r.manual_rot != 0.0
-        list.push(out, "field rotation offset ${fixed6(r.manual_rot)}")
     if r.manual_dx != 0.0 or r.manual_dy != 0.0
         list.push(out, "field position offset ${fixed6(r.manual_dx)},${fixed6(r.manual_dy)}")
     if r.shift > 0.0005
         list.push(out, "position is the pad centre, ${fixed6(r.shift)} mm from the anchor")
     out
 
-// The corrections report: one line for each row that was changed from
-// what the board file says, with the rotation the board had and the
-// rotation written, and what was done, followed by the count of rows that
-// were not changed at all.  The person reviews this before the files are
+// How many rows have the source `source`.
+fn count(rs: [Cpl], source: Str) -> Int
+    list.len(list.filter(rs, r => r.source == source))
+
+// The corrections report: one line for every placed part, with the
+// rotation the board had and the rotation written, the source of the
+// rotation and what else was done to the row, followed by the count of
+// rows for each source.  The person reviews this before the files are
 // uploaded.
 pub fn report(rs: [Cpl]) -> [Str] []
     var out: [Str] = []
-    var plain = 0
     for r in rs
         let ch = changes(r)
-        if list.len(ch) == 0
-            plain += 1
-        else
-            list.push(out,
-                "${r.designator}: rotation ${fixed6(r.kicad_rot)} -> ${fixed6(r.rot)}, ${r.layer}: ${str.join(ch, "; ")}")
-    list.push(out, "${plain} row(s) are the board's own values")
+        list.push(out,
+            "${r.designator}: rotation ${fixed6(r.kicad_rot)} -> ${fixed6(r.rot)}, ${r.layer}: ${source_words(r)}${if list.len(ch) == 0 then "" else "; " + str.join(ch, "; ")}")
+    list.push(out,
+        "${count(rs, "verified")} row(s) have a verified part rotation, ${count(rs, "proposed")} a proposed one, ${count(rs, "other-side")} a part verified on the other side only, ${count(rs, "family")} a family row, ${count(rs, "field")} a rotation field and ${count(rs, "board")} the board's own value")
     out
 
-// The rows whose rotation the table or a field changed, which are the
-// ones a person looks at in the manufacturer's preview.
+// The rows whose rotation no preview has shown right with the value
+// written: every row whose source is not `verified`.
+pub fn unverified(rs: [Cpl]) -> [Cpl] []
+    list.filter(rs, r => r.source != "verified")
+
+// The rows whose rotation a table or a field changed and that no preview
+// has shown right, which are the ones a person looks at in the
+// manufacturer's preview: a proposed part entry, a part entry seen on the
+// other side only, and a family row or a field that adds a rotation.
 pub fn rotated(rs: [Cpl]) -> [Cpl] []
-    list.filter(rs, r => r.rule != "" and r.table_rot != 0.0 or r.manual_rot != 0.0)
+    list.filter(rs,
+        r => r.source == "proposed" or r.source == "other-side" or r.source == "family" and r.table_rot != 0.0 or r.source == "field")
