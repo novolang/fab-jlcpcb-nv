@@ -82,14 +82,16 @@ The Gerber files, the drill files and the position file that `hardware-gates-nv`
 | `bom.csv` | `Comment,Designator,Footprint,JLCPCB Part #`, one line for each group of parts, the part number taken from the symbol field the policy names (default `LCSC`) |
 | `cpl.csv` | `Designator,Mid X,Mid Y,Rotation,Layer`, in millimetres, the board's auxiliary origin as zero, y upward |
 | `corrections.txt` | every part whose rotation or position is not the board's own, with the rule that changed it |
-| `order-sheet.md` | the size, layers, assembly class and quantity, what to choose on the web form, the corrections, the checks and the open questions |
+| `order-sheet.md` | the PCBA Type to select on the form, the size, layers, assembly class and quantity, what to choose on the web form, the corrections, the checks and the open questions |
 | `package-manifest.json` | the files above with their SHA-256 |
 
 A package whose checks hold an error is written all the same, so that the person can read what is wrong, and `Package.ready` is false.
 
 ## Placement file
 
-The rows follow the Fabrication Toolkit (https://github.com/bennymeg/Fabrication-Toolkit, Apache-2.0), the maintained public KiCad plugin for this order. A part is placed at the centre of its pads, not at its anchor, with the board's auxiliary origin subtracted and y flipped. A part on the bottom has its rotation taken from 180. The rotation table of the Toolkit, `plugins/transformations.csv` at commit `7f627b6be76081b962161b9eb9fe3a326a18c915`, is carried in `fjdata` row for row; the first row whose pattern matches a footprint's name adds its rotation and moves the part by its offset, turned with the part. A footprint field `FT Rotation Offset` or `FT Position Offset` adds to that, and `FT Origin = Anchor` places the part at its anchor. Every part that changes is listed in `corrections.txt` and the order sheet, so that a person checks it in JLCPCB's preview.
+The rows follow the Fabrication Toolkit (https://github.com/bennymeg/Fabrication-Toolkit, Apache-2.0), the maintained public KiCad plugin for this order. A part is placed at the centre of its pads, not at its anchor, with the board's auxiliary origin subtracted and y flipped. A part on the bottom has its rotation taken from 180. The rotation table of the Toolkit, `plugins/transformations.csv` at commit `7f627b6be76081b962161b9eb9fe3a326a18c915`, is carried in `fjdata` row for row, with one row added, `^SOT-23-5` at 270 degrees, before `^SOT-23`; the first row whose pattern matches a footprint's name adds its rotation and moves the part by its offset, turned with the part. A footprint field `FT Rotation Offset` or `FT Position Offset` adds to that, and `FT Origin = Anchor` places the part at its anchor. Every part that changes is listed in `corrections.txt` and the order sheet, so that a person checks it in JLCPCB's preview.
+
+The row `^SOT-23-5` is there because the Toolkit's 180 degrees for `^SOT-23` draws a five-lead part a quarter turn off in JLCPCB's preview. On 2026-11-25 the preview showed `SOT-23` parts (AO3407A, three leads) right at 180 and `SOT-23-5` parts (AP2112K-3.3, TP4054) a quarter turn off at the 90 degrees that the 180 of the row `^SOT-23` gave, and 180 is right; the addition to KiCad's rotation is therefore 270. The other footprints that `^SOT-23` matches keep 180, as does `^TSOT-23`; see "What is not verified".
 
 The one row of the table with a negative look-ahead, `^SOP-(?!18_)`, is written as two rows, `^SOP-18_` and `^SOP-`, which give the same answer.
 
@@ -127,11 +129,13 @@ The figures were read on 23 November 2026 and are a statement of what the pages 
 
 ## Seen on the form
 
-On 2026-11-24 a person put a package of 0.1.0's predecessor through the form by hand and stopped before the cart. Seen: the bill and the placement file were accepted with the headers as written (15 parts detected, 10 confirmed); the form took the part numbers written in the bill; every part it filled on its own came from the comment or the footprint text; the Gerbers were taken as they were; and the preview drew every part about 12 mm too low, the cause being the origins described above. Not yet seen after the fix: the placements in the preview, and a board with parts on the bottom.
+On 2026-11-24 a person put a package of 0.1.0's predecessor through the form by hand and stopped before the cart. Seen: the bill and the placement file were accepted with the headers as written (15 parts detected, 10 confirmed); the form took the part numbers written in the bill; every part it filled on its own came from the comment or the footprint text; the Gerbers were taken as they were; and the preview drew every part about 12 mm too low, the cause being the origins described above. Not yet seen after the fix: a board with parts on the bottom.
+
+On 2026-11-25 a second run showed every placed part on its footprint, the three-lead `SOT-23` parts and the diodes and resistors in the right orientation, and the `SOT-23-5` parts a quarter turn off (fixed in 0.1.1 by the row `^SOT-23-5`). The quote came out as Standard assembly because the PCBA Type was left on the form's own choice; the order sheet names the type to select, and the quote page shows the type that was taken.
 
 ## What is not verified
 
-- Whether the preview now shows every part where the board has it, and the rotations: the table is the answer of a plugin that people use, and a part it does not list can still face the wrong way.
+- The rotations of the parts that the preview has not shown. Seen right: `SOT-23` at 180 and `SOT-23-5` at 270 added to KiCad's rotation, and the resistor, LED and diode rows of the board of 2026-11-25. Not seen: `SOT-23-5_HandSoldering`, which `^SOT-23-5` matches and so turns 270 on the ground that its pads are those of `SOT-23-5`; and `SOT-23-6`, `SOT-23-8`, `SOT-23W`, `SOT-23_Handsoldering`, `TSOT-23-5` and the other `TSOT-23` footprints, and `D_SOT-23`, which keep the Toolkit's 180. A part the table does not list can still face the wrong way; the preview is the check.
 - Whether JLCPCB takes the plated and non-plated holes in one drill file, as the gates' export produces, was not read on a JLCPCB page; the form took the Gerbers and the drill files of the first dry run without a remark.
 - Stock, price and the size of the extended-part fee are not looked up.
 - Copper weight, surface finish and solder mask colour are not in a board file and are left to the form.

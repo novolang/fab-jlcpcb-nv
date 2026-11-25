@@ -8,8 +8,9 @@ use fjdata
 @test
 fn test_the_rotation_table_has_the_rows_of_its_source_in_order()
     let rows = fjdata.rotations()
-    // 49 rows in the source, plus one for the look-ahead row that is two here.
-    test.assert_eq(list.len(rows), 53)
+    // 49 rows in the source, plus one for the look-ahead row that is two
+    // here, plus the row `^SOT-23-5` that the source does not have.
+    test.assert_eq(list.len(rows), 54)
     test.assert_eq(rows[0].pattern, "^Bosch_LGA-")
     test.assert_eq(rows[0].rotation, 90.0)
     test.assert_eq(rows[list.len(rows) - 1].pattern, "^qfn-")
@@ -17,6 +18,24 @@ fn test_the_rotation_table_has_the_rows_of_its_source_in_order()
         test.assert_eq(r.dx, 0.0)
         test.assert_eq(r.dy, 0.0)
         test.assert(str.starts_with(r.pattern, "^"))
+
+@test
+fn test_the_row_for_the_five_lead_package_stands_before_the_row_that_would_match_it_first()
+    let rows = fjdata.rotations()
+    var five = -1
+    var three = -1
+    var at = 0
+    for r in rows
+        if r.pattern == "^SOT-23-5"
+            five = at
+        if r.pattern == "^SOT-23"
+            three = at
+        at += 1
+    test.assert(five >= 0)
+    test.assert(five < three)
+    test.assert_eq(rows[five].rotation, 270.0)
+    test.assert_eq(rows[three].rotation, 180.0)
+    test.assert(str.contains(fjdata.sources()[0], "^SOT-23-5"))
 
 @test
 fn test_the_look_ahead_row_of_the_source_is_written_as_two_rows_with_the_same_answers()

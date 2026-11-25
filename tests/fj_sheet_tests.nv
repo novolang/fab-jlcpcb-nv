@@ -85,6 +85,18 @@ fn test_the_sheet_of_a_ready_double_sided_board_names_the_class_the_sides_and_th
     test.assert(str.contains(t, "1 part(s) are left out by the design (H1)"))
 
 @test
+fn test_the_sheet_names_the_pcba_type_to_select_in_its_first_lines_and_says_the_form_may_preselect_the_other()
+    let b = board(90.0, [part("R1", "top", false, false)])
+    let rows = fjcpl.rows(b, [])
+    let cs = [FjCheck { name: "x", ok: true, severity: "error", detail: "fine" }]
+    for class in ["Economic", "Standard"]
+        let t = fjsheet.sheet(b, rows, bom(), cs, order(5, class, []))
+        let lines = str.split(t, "\n")
+        test.assert_eq(lines[4],
+            "**PCBA Type on the form: ${class}.**  Select it yourself under PCB Assembly.  The form may preselect the other type, and a quote taken with the type left alone was priced as Standard assembly.  Read the type again on the quote page before the price.")
+        test.assert(str.contains(lines[2], "Nothing has been ordered"))
+
+@test
 fn test_the_sheet_of_a_board_with_an_error_says_it_is_not_ready_and_one_with_no_quantity_says_so()
     let b = board(90.0, [part("R1", "top", false, false)])
     let rows = fjcpl.rows(b, [])

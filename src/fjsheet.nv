@@ -89,6 +89,9 @@ pub fn sheet(b: FabBoard, rows: [Cpl], bom: [BomLine], cs: [FjCheck], o: Order) 
     list.push(out,
         "Prepared by fab-jlcpcb-nv.  **Nothing has been ordered and no service was called.**  The package is " + verdict)
     list.push(out, "")
+    list.push(out,
+        "**PCBA Type on the form: ${o.class}.**  Select it yourself under PCB Assembly.  The form may preselect the other type, and a quote taken with the type left alone was priced as Standard assembly.  Read the type again on the quote page before the price.")
+    list.push(out, "")
     list.push(out, "## The board")
     list.push(out, "")
     list.push(out, "- Size: ${fjcpl.fixed6(b.width)} by ${fjcpl.fixed6(b.height)} mm")

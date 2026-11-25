@@ -108,7 +108,7 @@ fn test_the_package_manifest_holds_the_hashes_of_the_files_and_verifies() [io, f
     let root = copy_of_fixture("pk2")
     let p = pack(root, 0)
     let m = fs.read("${p.dir}/package-manifest.json") ?? ""
-    test.assert(str.contains(m, "fab-jlcpcb-nv 0.1.0"))
+    test.assert(str.contains(m, "fab-jlcpcb-nv 0.1.1"))
     test.assert(str.contains(m, "\"path\": \"cpl.csv\""))
     test.assert(not str.contains(m, "package-manifest.json\""))
     test.assert_eq(hgmanifest.verify(m, p.dir, p.dir), [])

@@ -177,7 +177,7 @@ pub fn prepare(root: Str, rev: Str, name: Str, qty: Int) -> Result<Package, FjFa
         refused: refused }
     list.push(files, put(dir, "order-sheet.md", fjsheet.sheet(b, rows, bom, cs, o)))
     fs.write("${dir}/package-manifest.json",
-        hgmanifest.build("fab-jlcpcb-nv 0.1.0", "", dir, [], dir, files))
+        hgmanifest.build("fab-jlcpcb-nv 0.1.1", "", dir, [], dir, files))
     list.push(files, "package-manifest.json")
     Ok(Package { dir: dir,
         files: files,

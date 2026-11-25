@@ -90,6 +90,29 @@ fn test_the_table_row_that_matches_is_the_first_in_the_sources_order()
     test.assert(fjcpl.matching_row("R_0603", t) == None)
 
 @test
+fn test_the_five_lead_package_is_turned_270_and_the_other_sot_23_footprints_keep_180()
+    let t = fjdata.rotations()
+    test.assert_eq((fjcpl.matching_row("Package_TO_SOT_SMD:SOT-23-5", t) ?? t[0]).rotation, 270.0)
+    test.assert_eq((fjcpl.matching_row("Package_TO_SOT_SMD:SOT-23-5_HandSoldering", t) ?? t[0]).rotation, 270.0)
+    test.assert_eq((fjcpl.matching_row("Package_TO_SOT_SMD:SOT-23", t) ?? t[0]).rotation, 180.0)
+    test.assert_eq((fjcpl.matching_row("Package_TO_SOT_SMD:SOT-23_Handsoldering", t) ?? t[0]).rotation, 180.0)
+    test.assert_eq((fjcpl.matching_row("Package_TO_SOT_SMD:SOT-23-6", t) ?? t[0]).rotation, 180.0)
+    test.assert_eq((fjcpl.matching_row("Package_TO_SOT_SMD:SOT-23-8", t) ?? t[0]).rotation, 180.0)
+    test.assert_eq((fjcpl.matching_row("Package_TO_SOT_SMD:SOT-23W", t) ?? t[0]).rotation, 180.0)
+    test.assert_eq((fjcpl.matching_row("Package_TO_SOT_SMD:TSOT-23-5", t) ?? t[0]).rotation, 180.0)
+    test.assert_eq((fjcpl.matching_row("Package_TO_SOT_SMD:D_SOT-23", t) ?? t[0]).rotation, 180.0)
+
+@test
+fn test_a_five_lead_part_turned_270_in_kicad_is_written_at_180_and_a_three_lead_part_turned_180_at_0()
+    let u = mk("U2", "Package_TO_SOT_SMD:SOT-23-5", "top", 10.0, 10.0, 270.0, 10.0, 10.0)
+    let q = mk("Q1", "Package_TO_SOT_SMD:SOT-23", "top", 20.0, 10.0, 180.0, 20.0, 10.0)
+    let rs = fjcpl.rows(board([u, q], 0.0, 0.0), fjdata.rotations())
+    test.assert_eq(rs[0].rot, 180.0)
+    test.assert_eq(rs[0].rule, "^SOT-23-5")
+    test.assert_eq(rs[1].rot, 0.0)
+    test.assert_eq(rs[1].rule, "^SOT-23")
+
+@test
 fn test_a_pattern_is_matched_against_the_name_without_its_library_and_a_pattern_with_a_colon_against_the_whole()
     let t = [Row { pattern: "^Special:Thing", rotation: 10.0, dx: 0.0, dy: 0.0 },
         Row { pattern: "^Thing", rotation: 20.0, dx: 0.0, dy: 0.0 },

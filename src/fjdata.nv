@@ -90,7 +90,7 @@ pub fn cpl_header() -> [Str] []
 
 // The sources of the tables, as lines for a report.
 pub fn sources() -> [Str] []
-    ["rotations: Fabrication Toolkit plugins/transformations.csv at 7f627b6be76081b962161b9eb9fe3a326a18c915, Apache-2.0, https://github.com/bennymeg/Fabrication-Toolkit",
+    ["rotations: Fabrication Toolkit plugins/transformations.csv at 7f627b6be76081b962161b9eb9fe3a326a18c915, Apache-2.0, https://github.com/bennymeg/Fabrication-Toolkit, with the row ^SOT-23-5 added",
      "bom columns: JLCPCB sample BOM, https://s3.amazonaws.com/helpscout.net/docs/assets/59f1de7804286313cffbb22c/attachments/60ee4acd9e87cb3d0124d284/Sample-BOM_JLCSMT.xlsx",
      "cpl columns: https://jlcpcb.com/help/article/pick-place-file-for-pcb-assembly, updated 2026-09-09",
      "capabilities: https://jlcpcb.com/capabilities/pcb-capabilities and https://jlcpcb.com/capabilities/pcb-assembly-capabilities, read 2026-11-23"]
@@ -165,7 +165,13 @@ pub fn max_size(layers: Int) -> [Float] []
     else
         [656.0, 586.0]
 
-// The rotation table, in the order of its source.
+// The rotation table: the rows of its source, in order, and one row added.
+//
+// The row `^SOT-23-5` stands before `^SOT-23` because the first row that
+// matches wins.  The source's 180 degrees draws a SOT-23-5 part a quarter
+// turn off in the manufacturer's preview (seen on 2026-11-25 for two
+// parts); 270 draws it right.  The three-lead SOT-23 and the other
+// footprints that `^SOT-23` matches keep the source's 180.
 pub fn rotations() -> [Row] []
     [
         Row { pattern: "^Bosch_LGA-", rotation: 90.0, dx: 0.0, dy: 0.0 },
@@ -201,6 +207,7 @@ pub fn rotations() -> [Row] []
         Row { pattern: "^SOP-4_", rotation: 0.0, dx: 0.0, dy: 0.0 },
         Row { pattern: "^SOT-143", rotation: 180.0, dx: 0.0, dy: 0.0 },
         Row { pattern: "^SOT-223", rotation: 180.0, dx: 0.0, dy: 0.0 },
+        Row { pattern: "^SOT-23-5", rotation: 270.0, dx: 0.0, dy: 0.0 },
         Row { pattern: "^SOT-23", rotation: 180.0, dx: 0.0, dy: 0.0 },
         Row { pattern: "^SOT-353", rotation: 180.0, dx: 0.0, dy: 0.0 },
         Row { pattern: "^SOT-363", rotation: 180.0, dx: 0.0, dy: 0.0 },
