@@ -5,6 +5,27 @@ All notable changes to fab-jlcpcb-nv are recorded here. The format is
 package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 with the pre-1.0 rule that a breaking change bumps the MINOR number.
 
+## [0.1.2] — 2026-11-26
+
+### Changed
+
+- The four `proposed` entries of `fjdata.part_rotations` are `verified`, seen on the top side on 2026-11-26: `C295747` (S2B-PH-SM4-TB, adds 0: the contacts sit on the signal pads), `C2895249` (nRF52833 QFN-40, adds 0: the model's dot and pin 1 mark sit on the silk triangle), `C2652978` (TXB0106RGYR VQFN-16, adds 270: the dot sits on the silk mark) and `C404280` (MHPA1010RGBDT RGB LED, adds 90: "1+" sits at the marked corner). The table holds 33 entries, all verified. The status `proposed` and its handling in the placement file, the sheet and the check `rotations` stay for the next part a preview draws wrong.
+
+### Added
+
+- `fjdata.economic_rows`, the manufacturer's table "PCB Specs for Economic PCB Assembly" as the order form showed it on 2026-11-26 (layers, thickness, solder mask colours, surface finishes, quantity), and `fjdata.economic_choices`, the rows that hold for a board's layers and thickness and for a chosen quantity.
+- The check `economic-table` (a warning): the rows of the table that keep the board Economic, or why there is none. An 8-layer board has none: the table lists 2, 4 and 6 layers, and the form offered the 8-layer feather PCBA Type Standard only, with Economic greyed out. The check also fails for a board with placed parts on both sides: the form greyed out Assembly Side Both Sides under Economic on 2026-11-26. The package has twenty checks.
+- The step 2 of "On the web form" in the order sheet of an Economic board names the surface finish and the solder mask colour to set before PCB Assembly is switched on, from the table's rows for the board, and says that the finish the form preselects can rule Economic out: on 2026-11-26 the form greyed out Economic on a 2-layer, 1.6 mm, green board until the Surface Finish was set to "LeadFree HASL"; the form had preselected OSP, which is in no row of the table, and the default may change.
+- The section "The assembly" of the order sheet lists the combinations of colour, finish and quantity on the form that keep the board Economic, or says that none exists and why (the layer count, the thickness, the quantity, or parts on both sides). For an Economic board it also states what the form showed on 2026-11-26 with Economic selected on a 2-layer, 33.29 by 18.06 mm board: the board kept its own size with no edge rails, tooling holes were added by JLCPCB, Assembly Side offered Top Side or Bottom Side only, and PCBA Qty offered 5 or 2.
+
+- An open question of the order sheet names the other PCB choices that the form preselects and a board file does not hold, as observed on 2026-11-26 on a 2-layer board: with PCB Assembly off, Via Plating Method Not Specified and no Material Type or Via Plating Method charge line (OSP $4.10, LeadFree HASL $5.20); with PCB Assembly on and Economic selected, Material Type FR4 TG135 and Via Plating Method Horizontal Electroless Copper Plating, 3.32 each; whether Standard does the same was not observed. It adds that OSP is the cheaper finish on the bare board and rules Economic out.
+
+- `tools/calib`: three calibration boards for a dry-run suite, each part of a footprint family placed once on the top and once on the bottom side on a labelled grid, with a silk triangle at pin 1, written as KiCad projects from KiCad's footprint library; `parts.csv` with 70 parts and their JLCPCB part numbers, each `confirmed` or `unconfirmed` against its public part page; `calib_kit.py`, which makes the order package of each board and writes a kit with a README of the steps and screenshots and a `results.md` table. The tests are `tests/fj_calib_tests.nv` and `tests/calib_test.py`.
+
+### Known
+
+- Four parts of the 8-layer board were not drawn in the preview of 2026-11-26 for lack of stock (U1, U2 the nPM1300, U4 and the crystal Y1); they have no entry.
+
 ## [0.1.1] — 2026-11-25
 
 ### Added

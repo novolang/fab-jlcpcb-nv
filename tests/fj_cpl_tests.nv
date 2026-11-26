@@ -410,4 +410,4 @@ fn test_the_parts_of_the_three_dry_run_kits_are_written_as_the_kits_files_have_t
         [0.0, 180.0, 180.0, 270.0, 270.0, 180.0, 0.0, 180.0, 180.0, 270.0, 90.0, 180.0, 270.0])
     test.assert_eq(list.map(rs, r => r.source),
         ["verified", "verified", "verified", "verified", "verified", "verified", "verified",
-         "proposed", "proposed", "proposed", "proposed", "family", "board"])
+         "verified", "verified", "verified", "verified", "family", "board"])

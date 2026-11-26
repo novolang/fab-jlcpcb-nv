@@ -89,7 +89,7 @@ fn test_a_revision_that_passed_its_gates_gets_the_files_of_the_order() [io, fs]
     test.assert_eq(p.class, "Standard")
     test.assert_eq(list.len(p.rows), 3)
     test.assert(p.ready)
-    test.assert_eq(list.len(p.checks), 19)
+    test.assert_eq(list.len(p.checks), 20)
     for f in p.files
         test.assert((fs.size("${p.dir}/${f}") ?? 0) > 0)
     test.assert_eq(fs.read("${p.dir}/bom.csv") ?? "",

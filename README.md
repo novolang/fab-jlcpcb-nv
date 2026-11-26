@@ -1,6 +1,6 @@
 # fab-jlcpcb-nv
 
-A board that passed its checks is turned into the files JLCPCB asks for when a board is ordered with assembly: the Gerber and drill zip, the bill of materials in JLCPCB's columns, and the placement file (CPL) with the rotation corrections the assembly machines need. The package also writes an order sheet that a person reads before ordering, and runs nineteen checks of the design against the manufacturer's published limits, against the part pages the manufacturer publishes, and against itself. One of them lays every placed part over the Gerber copper, so a placement file that does not share the Gerbers' origin cannot be written.
+A board that passed its checks is turned into the files JLCPCB asks for when a board is ordered with assembly: the Gerber and drill zip, the bill of materials in JLCPCB's columns, and the placement file (CPL) with the rotation corrections the assembly machines need. The package also writes an order sheet that a person reads before ordering, and runs twenty checks of the design against the manufacturer's published limits, against the part pages the manufacturer publishes, and against itself. One of them lays every placed part over the Gerber copper, so a placement file that does not share the Gerbers' origin cannot be written.
 
 The package places no order and calls no service. It reads the revision directory that `hardware-gates-nv` wrote, and it refuses a revision whose gates did not pass or whose files changed after the gates ran.
 
@@ -37,7 +37,7 @@ fn main() [io, fs]
                                 println(line)
 ```
 
-On `tests/fixtures/ok`, a board of three resistors, one on the bottom, with two mounting holes, this writes `hardware/fab/rev-A/jlcpcb/` and prints a line for each check. Seventeen hold and start with `ok`; two do not, and both are warnings: the board is below the minimum of the Standard class, and the three part numbers have no saved part page:
+On `tests/fixtures/ok`, a board of three resistors, one on the bottom, with two mounting holes, this writes `hardware/fab/rev-A/jlcpcb/` and prints a line for each check. Eighteen hold and start with `ok`; two do not, and both are warnings: the board is below the minimum of the Standard class, and the three part numbers have no saved part page:
 
 ```
 warning  assembly-class  Standard assembly takes a single board of 70 by 70 mm at the least, the board is 30 by 20: it needs a panel, which this package does not make
@@ -82,7 +82,7 @@ The Gerber files, the drill files and the position file that `hardware-gates-nv`
 | `bom.csv` | `Comment,Designator,Footprint,JLCPCB Part #`, one line for each group of parts, the part number taken from the symbol field the policy names (default `LCSC`) |
 | `cpl.csv` | `Designator,Mid X,Mid Y,Rotation,Layer`, in millimetres, the board's auxiliary origin as zero, y upward |
 | `corrections.txt` | a line for every placed part: the rotation the board had and the rotation written, the source of the rotation, and any position or side change |
-| `order-sheet.md` | the PCBA Type to select on the form, the parts whose rotation is not verified (or one line that all are), the size, layers, assembly class and quantity, what to choose on the web form, the source of every rotation, the checks and the open questions |
+| `order-sheet.md` | the PCBA Type to select on the form, the Economic choices of the manufacturer's table for the board, the parts whose rotation is not verified (or one line that all are), the size, layers, assembly class and quantity, what to choose on the web form, the source of every rotation, the checks and the open questions |
 | `package-manifest.json` | the files above with their SHA-256 |
 
 A package whose checks hold an error is written all the same, so that the person can read what is wrong, and `Package.ready` is false.
@@ -98,14 +98,16 @@ JLCPCB's preview draws a part from the part's own model, so the rotation a part 
 - `verified`: the preview of the order form drew the part right with this value, on the sides named.
 - `proposed`: the preview drew the part wrong with the family value (or, where the family table has no row, with no addition), and the entry holds the value read from the picture that turns the model onto the footprint's pin 1. No preview has shown it right.
 
-An entry is made only for a part that a preview showed. The table holds the parts of the three dry runs of 2026-11-25: 29 verified entries (the three-lead and five-lead SOT-23 parts, a diode, an LED and four resistor values seen on both sides; a USB-C receptacle, a JST SH connector, a SOT-553, a blue LED, a push button, a crystal, an inductor and the capacitors and resistors of the feather board on top) and four proposed ones:
+An entry is made only for a part that a preview showed. The table holds the parts of the dry runs of 2026-11-25 and 2026-11-26, 33 entries, all `verified`: the three-lead and five-lead SOT-23 parts, a diode, an LED and four resistor values seen on both sides; a USB-C receptacle, a JST SH connector, a SOT-553, a blue LED, a push button, a crystal, an inductor and the capacitors and resistors of the feather board on top; and, seen on top on 2026-11-26 after the preview drew them wrong on 2026-11-25 with the family value or with no addition, four parts whose entry holds the value read from the picture:
 
-| Part number | Part | Adds | Status | Why |
-| --- | --- | --- | --- | --- |
-| `C295747` | S2B-PH-SM4-TB JST PH connector | 0 | proposed | the family row `^JST_PH_S` (180) drew it half a turn off |
-| `C2895249` | nRF52833 QFN-40 | 0 | proposed | the family row `^QFN-` (90) drew it a quarter turn off |
-| `C2652978` | TXB0106RGYR VQFN-16 | 270 | proposed | with no addition the model's pin 1 sat a quarter turn from the footprint's |
-| `C404280` | MHPA1010RGBDT RGB LED | 90 | proposed | with no addition the model's pin 1 sat a quarter turn from the footprint's |
+| Part number | Part | Adds | Seen |
+| --- | --- | --- | --- |
+| `C295747` | S2B-PH-SM4-TB JST PH connector | 0 | top, 2026-11-26: the contacts sit on the signal pads (the family row `^JST_PH_S`, 180, drew it half a turn off) |
+| `C2895249` | nRF52833 QFN-40 | 0 | top, 2026-11-26: the model's dot and pin 1 mark sit on the silk triangle (the family row `^QFN-`, 90, drew it a quarter turn off) |
+| `C2652978` | TXB0106RGYR VQFN-16 | 270 | top, 2026-11-26: the dot sits on the silk mark (with no addition the model's pin 1 sat a quarter turn from the footprint's) |
+| `C404280` | MHPA1010RGBDT RGB LED | 90 | top, 2026-11-26: "1+" sits at the marked corner (with no addition the model's pin 1 sat a quarter turn from the footprint's) |
+
+The table holds no `proposed` entry. The status stays in the lookup for the next part a preview draws wrong.
 
 ### Rotation by footprint family
 
@@ -128,6 +130,36 @@ Each placed part has one source for its rotation, named in `corrections.txt` and
 
 The order sheet has a section near the top, `Rotations not verified`, that lists every part whose source is not a verified part, with its part number, the rotation written and the source, and says to check each in the form's preview (Component Placements) before ordering. A board whose every part is verified has one line in its place. The check `rotations` warns for the parts whose rotation a table or a field changed and that no preview has shown right.
 
+## Calibration boards
+
+`tools/calib` makes three KiCad boards for a dry-run suite: one screenshot of the order form's placement preview then checks many rows of the rotation tables at once. Each board holds one part of each footprint family of a group, once on the top side (`T01`, `T02`, ...) and once on the bottom side (`B01`, `B02`, ...) at the same place on a grid of 24 by 24 millimetre cells, 6 cells to a row, with at most 30 cells to a board. The reference, the part number and the footprint's name are on the silkscreen of each side, a white silk triangle points at pin 1 of every footprint, and the footprints are those of KiCad 10.0.8's library. The boards carry no nets; they are made to be placed, not to work.
+
+| Board | Parts on a side | Holds |
+| --- | --- | --- |
+| `calib-1` | 29 | integrated circuits: LQFP, TQFP, QFN, DFN, SOIC, SOP, SSOP, TSSOP, HTSSOP, MSOP, VSSOP, PowerPAK, Bosch LGA, SOT-23-6, TSOT-23-6, SOT-353, SOT-363, SOT-89 and SOT-143, with the four parts of 2026-11-26 as controls |
+| `calib-2` | 30 | transistors in SOT-23, SOT-23-5, SOT-223 and TO-252, diodes in SOD-123, SOD-323, SMA and SMB, resistors from 0201 to 2512 and two resistor arrays, capacitors from 0402 to 1210, a tantalum and two aluminium electrolytic footprints, and inductors |
+| `calib-3` | 11 | USB-C and micro-B receptacles, JST PH and GH connectors, a tact switch, three crystals and three LEDs |
+
+`parts.csv` lists every part: board, cell, footprint, value, JLCPCB part number, a status and a note. A part number is `confirmed` when its public part page (read 2026-11-26) names a manufacturer part and a package that fit the footprint, and `unconfirmed` when it does not, with the reason in the note; each kit's README lists its unconfirmed numbers. The numbers come from the dry-run kits and the saved part pages where they were there, and otherwise from public catalogue pages found by a search and then checked against the part page. Nothing was sent to JLCPCB or any other service but reads of those public pages.
+
+Three scripts, in `tools/calib`:
+
+| Script | Does |
+| --- | --- |
+| `calib_data.py` | reads `parts.csv` and computes the grid, the board size and the silk labels; plain Python 3, no KiCad |
+| `calib_board.py` | writes one board's `.kicad_pcb`, `.kicad_sch`, `.kicad_pro` and `gates.toml` with KiCad's `pcbnew`; run with KiCad's Python, which is `flatpak run --command=python3 org.kicad.KiCad` for the Flatpak, with the footprint library directory (`/app/extensions/Library/footprints` inside the Flatpak) |
+| `calib_kit.py` | for each board: writes the project, copies the saved part pages, runs the program that makes the order package (the example of this README built as an executable), and writes the kit: the files to upload, a README of what to do at the form, and a `results.md` with a table of every part to read from the screenshots |
+
+```
+python3 tools/calib/calib_kit.py --pages <saved part pages> --prepare <program> --work <work directory> --out <kits directory>
+```
+
+A board is at least 70 mm on each side. This is the least of the Standard class (70 by 70 mm), and it is an assumption, not confirmed on the form, that the form then keeps the board at its own size with no edge rails. The parts are on both sides, and the form greys out Both Sides under Economic (seen 2026-11-26), so the order is Standard; the order sheet says so.
+
+Rows of the family table that no part of `parts.csv` reaches by the first-match rule: `^D_SOT-23` (the installed library has no `D_SOT-23_ANK` footprint), `^SC-74-6` and `^TDSON-8-1` (a search found no part number), `^SOIC127P798X216-8N`, `^TO-277`, `^UDFN-10`, `^USON-10`, `^VSON-8_` and `^VSSOP-10_-` (no part number was looked for), and the rows that an earlier row shadows (`^SOIC-16_`, `^SOIC-8_`, `^SOP-18_`, `^SOP-4_`, the second `^VSSOP-8_` and `^qfn-`). `tests/fj_calib_tests.nv` holds this list.
+
+The check of each board with `kicad-cli pcb drc` (KiCad 10.0.8) reports, with no net on any pad, clearance and solder-mask-bridge violations between pads of one footprint (the exposed pad of a QFN, the two rows of a USB-C receptacle, the pads of a 0201) and silkscreen overlaps; `gates.toml` ignores the first two and counts them.
+
 ## The checks
 
 | Check | Severity | What it measures |
@@ -139,6 +171,7 @@ The order sheet has a section near the top, `Rotations not verified`, that lists
 | footprints-agree | warning | the bill's footprint is the board's |
 | positions-agree | error | KiCad's own position file gives the anchors the placement file starts from |
 | assembly-class | warning | Economic or Standard assembly, and the sizes and quantities of that class |
+| economic-table | warning | the manufacturer's table of PCB specs for Economic assembly has a row for the board's layers, thickness and quantity; the detail lists the colours, finishes and quantities of the rows, or says why there is none |
 | board-size, layers, thickness | error | within the manufacturer's range |
 | track-width | error | the narrowest track against the least for the layer count |
 | clearance-setting | warning | the project's rule minimums against the manufacturer's least |
@@ -149,6 +182,26 @@ The order sheet has a section near the top, `Rotations not verified`, that lists
 | part-pages | warning | every part number has a saved part page |
 | part-assembly-class | error | no part number is Standard only on a board that is Economic by itself |
 | extended-parts | warning | how many part numbers are Extended parts |
+
+## The Economic table
+
+The order form shows a table, "PCB Specs for Economic PCB Assembly", that lists for each layer count and thickness the solder mask colours, the surface finishes and the quantities that keep a board in the Economic class. `fjdata.economic_rows` holds it row for row, as read from the form on 2026-11-26; the manufacturer may change it. A board of any layer count the table does not list (an 8-layer board, as seen on the form the same day: Economic greyed out, Standard only) or of a thickness the table does not list for its layer count takes Standard assembly.
+
+| Layers | Thickness (mm) | Solder mask | Surface finish | Quantity |
+| --- | --- | --- | --- | --- |
+| 2 | 0.8 | Green | Lead-Free HASL, Leaded HASL | 2 to 30 |
+| 2 | 1.0 | Green, Black | Lead-Free HASL, Leaded HASL | 2 to 30 |
+| 2 | 1.2 | Green, Black | Lead-Free HASL, Leaded HASL | 2 to 30 |
+| 2 | 1.6 | Green | Lead-Free HASL, Leaded HASL, ENIG (lead-free or leaded) | 2 to 50 |
+| 2 | 1.6 | Black | Lead-Free HASL, Leaded HASL | 2 to 50 |
+| 2 | 1.6 | Blue, Purple | Lead-Free HASL, Leaded HASL | 5 to 30 |
+| 2 | 1.6 | Red, White | Leaded HASL | 5 to 30 |
+| 4 | 1.0 | Green | Lead-Free HASL, Leaded HASL | 2 to 30 |
+| 4 | 1.2 | Green | Lead-Free HASL, Leaded HASL | 2 to 50 |
+| 4 | 1.6 | Green | Lead-Free HASL, Leaded HASL, ENIG | 2 to 50 |
+| 6 | 1.6 | Green | ENIG | 2 to 30 |
+
+The board file gives the layers and the thickness; the colour, the finish and the quantity are choices on the form. `fjdata.economic_choices` returns the rows that hold for a board's layers and thickness and, when the quantity is chosen, for the quantity. The check `economic-table` and the section "The assembly" of the order sheet list those rows as the combinations on the form that keep the board Economic, or say that none exists and why (the layer count is not listed, the thickness is not listed for the layer count, no row takes the quantity, or the board has placed parts on both sides, which the form greys out under Economic). The step 2 of the order sheet's "On the web form" names a finish from those rows to set before PCB Assembly is switched on: on 2026-11-26 the form greyed out Economic on a 2-layer, 1.6 mm, green board of quantity 5 until the Surface Finish was set to "LeadFree HASL" (the form had preselected OSP, which is in no row of the table; the default may change). The table says nothing about the size of a board, and the package adds no limit from it. The sides come from what the form showed: on 2026-11-26, with Economic selected on the `simple` kit (2 layers, 33.29 by 18.06 mm, 1.6 mm, green, LeadFree HASL, 5 pieces), the board kept its own size with no edge rails and tooling holes added by JLCPCB, Assembly Side offered Top Side or Bottom Side and greyed out Both Sides, and PCBA Qty offered 5 or 2.
 
 ## Read from JLCPCB's pages
 
@@ -168,9 +221,11 @@ On 2026-11-25 a second run showed every placed part on its footprint, the three-
 
 The same day the corrected board went through the form on the top side and on the bottom side: the `SOT-23-5` parts were right at 270 on both, and the bottom rule (180 minus the board's rotation, plus the table's) held for the `SOT-23`, `SOT-23-5`, diode and 0603 parts. An 8-layer board of 47 parts then showed that the form draws each part from its own model: of the family rows seen, `^SOT-23` held and `^SOT-23-5` (as first written), `^QFN-` and `^JST_PH_S` did not, and two parts with no row (an RGB LED and a VQFN-16 level shifter) were drawn a quarter turn off. The table of part rotations is the answer.
 
+On 2026-11-26 the regenerated 8-layer board went through the form's preview on the top side and the four parts that carried a proposed entry were drawn right with it (the table above). U1, U2 (the nPM1300), U4 and Y1 were not drawn, since the form had no stock for them, and stay without a verified entry. The form filed the 8-layer board under "Advanced PCB/PCBA", offered PCBA Type Standard only (Economic greyed out), enlarged the board to 70.42 by 70.86 mm with edge rails, and quoted the bare boards at $90.00 for 5. The order sheet of a board that the table of the Economic specs has no row for says so, with the reason.
+
 ## What is not verified
 
-- The rotation of every part that has no verified entry. The four proposed entries are the values read from the preview's picture, and each needs one look in the form: select the part, type the written rotation and see whether the model's pin 1 mark sits on the footprint's. The family table is the Toolkit's, with `^SOT-23-5` added; `^QFN-` and `^JST_PH_S` are known to be wrong for one part each, and the rest of its rows are not checked against the preview. A part the tables do not list can face the wrong way; the preview is the check, and the order sheet lists the parts to look at.
+- The rotation of every part that has no verified entry. A part with no entry needs one look in the form: select the part, type the written rotation and see whether the model's pin 1 mark sits on the footprint's. The family table is the Toolkit's, with `^SOT-23-5` added; `^QFN-` and `^JST_PH_S` are known to be wrong for one part each, and the rest of its rows are not checked against the preview. A part the tables do not list can face the wrong way; the preview is the check, and the order sheet lists the parts to look at.
 - A verified entry is evidence for one part number on the sides named. The same footprint with another part number can need another value.
 - A part whose model is symmetric (resistors, capacitors, a push button, a four-pin crystal) shows a quarter-turn error and does not show a half-turn error in the preview; its verified entry covers what the preview can show.
 - `SOT-23-5_HandSoldering`, which `^SOT-23-5` matches on the ground that its pads are those of `SOT-23-5`; and `SOT-23-6`, `SOT-23-8`, `SOT-23W`, `SOT-23_Handsoldering`, `TSOT-23-5` and the other `TSOT-23` footprints, and `D_SOT-23`, which keep the Toolkit's 180.
@@ -193,6 +248,8 @@ novo test tests/fj_overlay_tests.nv    # the placement laid over the Gerber copp
 novo test tests/fj_catalog_tests.nv    # the saved part pages and the checks over them
 novo test tests/fj_pack_tests.nv       # recorded revisions made into packages, and every refusal
 novo test tests/fj_fault_tests.nv      # messages and codes
+novo test tests/fj_calib_tests.nv      # the part table of the calibration boards against the family table
+python3 -I -m unittest discover -s tests -p 'calib_test.py'   # the grid and the kit text of the calibration boards
 bash tests/coverage.sh                 # line coverage over src/, merged across the suites
 ```
 

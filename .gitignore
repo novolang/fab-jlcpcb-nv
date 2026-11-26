@@ -48,3 +48,4 @@ fab-jlcpcb-nv
 # Scratch files of the live suites.
 tests/_work/
 *.kicad_prl
+__pycache__/

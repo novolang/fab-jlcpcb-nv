@@ -1,0 +1,71 @@
+board,cell,footprint,value,part,status,note
+1,1,Package_QFP:LQFP-48_7x7mm_P0.5mm,STM32F103C8T6,C8734,confirmed,
+1,2,Package_QFP:LQFP-64_10x10mm_P0.5mm,STM32F103RCT6,C8323,confirmed,
+1,3,Package_QFP:TQFP-32_7x7mm_P0.8mm,ATMEGA328P-AU,C14877,confirmed,
+1,4,Package_DFN_QFN:QFN-20-1EP_4x4mm_P0.5mm_EP2.5x2.5mm,ATTINY1634-MU,C145395,confirmed,
+1,5,Package_DFN_QFN:QFN-28-1EP_5x5mm_P0.5mm_EP3.35x3.35mm,CP2102N-A02-GQFN28R,C964632,confirmed,
+1,6,Package_DFN_QFN:QFN-32-1EP_5x5mm_P0.5mm_EP3.6x3.6mm,nPM1300-QEAA-R,C7466043,confirmed,"nPM1300, rotation not yet drawn in a preview"
+1,7,Package_DFN_QFN:QFN-40-1EP_5x5mm_P0.4mm_EP3.6x3.6mm,nRF52833-QDAA-R,C2895249,confirmed,control: verified on top 2026-11-26
+1,8,Package_DFN_QFN:QFN-56-1EP_7x7mm_P0.4mm_EP5.6x5.6mm,RP2040,C2040,unconfirmed,"the part's package is LQFN-56 7x7 mm; the footprint is KiCad's QFN-56 7x7 mm P0.4 mm, whose pad 1 corner and pad count match, and its exposed pad (5.6 mm square) is not compared with the part's"
+1,9,Package_DFN_QFN:DFN-8-1EP_3x2mm_P0.5mm_EP1.3x1.5mm,24AA04-I/MC,C1353849,confirmed,part package DFN-8-EP(2x3)
+1,10,Package_DFN_QFN:Texas_RGY_R-PVQFN-N16_EP2.05x2.55mm,TXB0106RGYR,C2652978,confirmed,control: verified on top 2026-11-26
+1,11,Package_SO:SOIC-8_3.9x4.9mm_P1.27mm,LM358DR2G,C7950,confirmed,
+1,12,Package_SO:SOIC-8_5.3x5.3mm_P1.27mm,W25Q64JVSSIQ,C179171,confirmed,part package SOIC-8 208 mil
+1,13,Package_SO:SOIC-16_3.9x9.9mm_P1.27mm,74HC595D,C5947,confirmed,part package SO-16
+1,14,Package_SO:SOIC-8-1EP_3.9x4.9mm_P1.27mm_EP2.41x3.3mm,TP4056,C16581,confirmed,part package ESOP-8
+1,15,Package_SO:SOP-4_3.8x4.1mm_P2.54mm,PC817X2CSP9F,C66405,unconfirmed,"the part's package is named SMD-4P; the footprint is KiCad's SOP-4 3.8 x 4.1 mm at 2.54 mm pitch, the usual size of this optocoupler, not compared with the datasheet"
+1,16,Package_SO:SSOP-28_5.3x10.2mm_P0.65mm,FT232RL,C8690,confirmed,part package SSOP-28 208 mil
+1,17,Package_SO:TSSOP-16_4.4x5mm_P0.65mm,74HC4051PW,C5645,confirmed,
+1,18,Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm,TXS0108EPWR,C17206,confirmed,
+1,19,Package_SO:HTSSOP-20-1EP_4.4x6.5mm_P0.65mm_EP3.4x6.5mm,TPS54316PWP,C2879348,confirmed,part package HTSSOP-20-EP
+1,20,Package_SO:MSOP-8_3x3mm_P0.65mm,LM358-VR,C96000,confirmed,
+1,21,Package_SO:VSSOP-8_2.3x2mm_P0.5mm,PCA9306DCUR,C33196,confirmed,part package VSSOP-8 (DCU)
+1,22,Package_SO:PowerPAK_SO-8_Single,SI7852DP-T1-E3,C141509,confirmed,
+1,23,Package_LGA:Bosch_LGA-8_2x2.5mm_P0.65mm_ClockwisePinNumbering,BMP280,C83291,confirmed,Standard only on its part page
+1,24,Package_TO_SOT_SMD:SOT-23-6,USBLC6-2SC6,C7519,confirmed,the row ^SOT-23 matches SOT-23-6 and was not seen in a preview
+1,25,Package_TO_SOT_SMD:TSOT-23-6,DIO6970TST6,C444646,confirmed,
+1,26,Package_TO_SOT_SMD:SOT-353_SC-70-5,SN74LVC1G14DCKR,C35740,confirmed,
+1,27,Package_TO_SOT_SMD:SOT-363_SC-70-6,BC847BS-7-F,C156292,confirmed,
+1,28,Package_TO_SOT_SMD:SOT-89-3,HT7333-A,C347191,confirmed,
+1,29,Package_TO_SOT_SMD:SOT-143,"BAS70-07,215",C282365,unconfirmed,"the part's package is SOT-143B; the footprint is KiCad's SOT-143, whose pin order is not compared with the datasheet"
+2,1,Package_TO_SOT_SMD:SOT-23,AO3400A,C20917,confirmed,
+2,2,Package_TO_SOT_SMD:SOT-23,MMBT3904,C20526,confirmed,
+2,3,Package_TO_SOT_SMD:SOT-23,AO3407A,C347478,confirmed,control: verified on both sides 2026-11-25
+2,4,Package_TO_SOT_SMD:SOT-23,BAT54C,C2135,confirmed,
+2,5,Package_TO_SOT_SMD:SOT-23-5,AP2112K-3.3,C51118,confirmed,control: verified on both sides 2026-11-25
+2,6,Package_TO_SOT_SMD:SOT-223-3_TabPin2,AMS1117-3.3,C6186,confirmed,
+2,7,Package_TO_SOT_SMD:TO-252-2,L78M05ABDT-TR,C58069,confirmed,
+2,8,Diode_SMD:D_SOD-123,1N4148W,C81598,confirmed,
+2,9,Diode_SMD:D_SOD-323,1N4148WS,C2128,confirmed,
+2,10,Diode_SMD:D_SOD-323F,1N5819,C48997863,confirmed,control: verified on both sides 2026-11-25
+2,11,Diode_SMD:D_SMA,SS14,C2480,confirmed,
+2,12,Diode_SMD:D_SMB,SMBJ5.0A,C127544,confirmed,
+2,13,Resistor_SMD:R_0201_0603Metric,10k,C473048,confirmed,Standard only on its part page
+2,14,Resistor_SMD:R_0402_1005Metric,10k,C25744,confirmed,control: verified on top 2026-11-25
+2,15,Resistor_SMD:R_0603_1608Metric,10k,C25804,confirmed,"the same family as the verified C25803; this number has no entry"
+2,16,Resistor_SMD:R_0805_2012Metric,10k,C17414,confirmed,
+2,17,Resistor_SMD:R_1206_3216Metric,10k,C17902,confirmed,
+2,18,Resistor_SMD:R_2512_6332Metric,1R,C3000711,confirmed,
+2,19,Resistor_SMD:R_Array_Convex_4x0603,10k x4,C29718,unconfirmed,the part is a 0603 x4 array; whether its terminals are convex or concave is not stated on its part page
+2,20,Resistor_SMD:R_Array_Concave_4x0603,10k x4,C29718,unconfirmed,the same part as the convex footprint above; the footprint's pad shape is not compared with the part
+2,21,Capacitor_SMD:C_0402_1005Metric,100n,C1525,confirmed,
+2,22,Capacitor_SMD:C_0603_1608Metric,100n,C14663,confirmed,
+2,23,Capacitor_SMD:C_0805_2012Metric,100n,C49678,confirmed,
+2,24,Capacitor_SMD:C_1206_3216Metric,10u,C13585,confirmed,
+2,25,Capacitor_SMD:C_1210_3225Metric,22u,C23635,confirmed,
+2,26,Capacitor_Tantalum_SMD:CP_EIA-3216-18_Kemet-A,10u tantalum,C7171,confirmed,
+2,27,Capacitor_SMD:CP_Elec_6.3x7.7,220u,C3342,confirmed,part package D6.3 x L7.7 mm
+2,28,Capacitor_SMD:C_Elec_6.3x7.7,220u,C3342,confirmed,the same part as the footprint above
+2,29,Inductor_SMD:L_0603_1608Metric,4.7u,C1034,confirmed,
+2,30,Inductor_SMD:L_0805_2012Metric,100R ferrite,C1015,confirmed,
+3,1,Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12,TYPE-C-31-M-12,C165948,confirmed,control: verified on top 2026-11-25
+3,2,Connector_USB:USB_Micro-B_Amphenol_10118194-0001LF_Horizontal,10118194-0001LF,C132563,confirmed,
+3,3,Connector_JST:JST_PH_S2B-PH-SM4-TB_1x02-1MP_P2.00mm_Horizontal,S2B-PH-SM4-TB,C295747,confirmed,control: verified on top 2026-11-26
+3,4,Connector_JST:JST_GH_SM04B-GHS-TB_1x04-1MP_P1.25mm_Horizontal,SM04B-GHS-TB,C189895,confirmed,
+3,5,Button_Switch_SMD:SW_SPST_B3U-1000P,B3U-1000P,C231329,confirmed,
+3,6,Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm,8 MHz,C2682775,confirmed,"12 pF, SMD3225-4P"
+3,7,Crystal:Crystal_SMD_2016-4Pin_2.0x1.6mm,32 MHz,C2682773,confirmed,control: verified on top 2026-11-25
+3,8,Crystal:Crystal_SMD_3215-2Pin_3.2x1.5mm,32.768 kHz,C32346,confirmed,no entry in the part table: the feather preview of 2026-11-25 drew no model for it
+3,9,LED_SMD:LED_0603_1608Metric,red,C2286,confirmed,control: verified on both sides 2026-11-25
+3,10,LED_SMD:LED_0805_2012Metric,red,C84256,confirmed,
+3,11,LED_SMD:LED_Wurth_150044M155260,RGB,C404280,confirmed,control: verified on top 2026-11-26

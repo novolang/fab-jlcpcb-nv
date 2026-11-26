@@ -18,6 +18,10 @@
 //                        auxiliary origin
 //   assembly-class       the board belongs to the Economic or the Standard
 //                        assembly class, and fits its sizes
+//   economic-table      the manufacturer's table of PCB specs for Economic
+//                        assembly has a row for the board's layers and
+//                        thickness (and the quantity), and the choices
+//                        on the form that keep the board Economic
 //   board-size           the board is within the sizes of the manufacturer
 //   layers, thickness    within the manufacturer's range
 //   track-width          the narrowest track, and the project's setting
@@ -236,6 +240,82 @@ pub fn class_of(b: FabBoard, qty: Int) -> Str []
     else
         "Economic"
 
+// A row of the Economic table in words: the colours, the finishes and the
+// quantities.
+fn economic_words(r: EconomicRow) -> Str
+    "solder mask ${str.join(r.colours, " or ")}, finish ${str.join(r.finishes, " or ")}, ${r.qty_min} to ${r.qty_max} pieces"
+
+// The rows of the Economic table for the board, as lines of words, one for
+// each row; empty when the table has no row for the board.  `qty` is the
+// number of boards, or zero when it is not chosen.
+pub fn economic_options(b: FabBoard, qty: Int) -> [Str] []
+    list.map(fjdata.economic_choices(b.layers, b.thickness, qty), r => economic_words(r))
+
+// The surface finishes of the rows of the Economic table that hold for the
+// board, each once, in the order of the table.
+pub fn economic_finishes(b: FabBoard, qty: Int) -> [Str] []
+    var out: [Str] = []
+    for r in fjdata.economic_choices(b.layers, b.thickness, qty)
+        for f in r.finishes
+            if not list.contains(out, f)
+                list.push(out, f)
+    out
+
+// Whether the board has placed parts on both sides.
+fn both_sides(b: FabBoard) -> Bool
+    let placed = list.filter(b.parts, p => not p.dnp and not p.no_pos)
+    list.any(placed, p => p.side == "bottom") and list.any(placed, p => p.side == "top")
+
+// Why the board cannot take Economic assembly, in words; empty when the
+// table has a row for it and its parts are on one side.  Two reasons are
+// joined by a semicolon.
+//
+// The table's reasons are the layer count, the thickness and the quantity.
+// The sides are not in the table; the form greyed out Assembly Side "Both
+// Sides" under Economic on 2026-11-26.
+pub fn economic_reason(b: FabBoard, qty: Int) -> Str []
+    var why: [Str] = []
+    if both_sides(b)
+        list.push(why, "the board has placed parts on both sides, and the form greys out Both Sides under Economic (seen 2026-11-26)")
+    if list.len(fjdata.economic_choices(b.layers, b.thickness, qty)) == 0
+        let same_layers = list.filter(fjdata.economic_rows(), r => r.layers == b.layers)
+        let same_thick = list.filter(same_layers, r => math.abs(r.thickness - b.thickness) < 0.005)
+        if list.len(same_layers) == 0
+            list.push(why, "the table lists 2, 4 and 6 layers and the board has ${b.layers}")
+        elif list.len(same_thick) == 0
+            list.push(why,
+                "the table lists no ${b.layers}-layer board of ${n(b.thickness)} mm (its ${b.layers}-layer thicknesses are ${str.join(list.map(unique_thicknesses(same_layers), t => n(t)), ", ")} mm)")
+        else
+            list.push(why,
+                "no ${b.layers}-layer row of ${n(b.thickness)} mm takes ${qty} pieces (they take ${list.min(list.map(same_thick, r => r.qty_min)) ?? 0} to ${list.max(list.map(same_thick, r => r.qty_max)) ?? 0})")
+    str.join(why, "; ")
+
+// The distinct thicknesses of some rows, in order.
+fn unique_thicknesses(rs: [EconomicRow]) -> [Float]
+    var out: [Float] = []
+    for r in rs
+        if not list.contains(out, r.thickness)
+            list.push(out, r.thickness)
+    out
+
+// Whether the manufacturer's table of PCB specs for Economic assembly
+// (read 2026-11-26) has a row for the board and the board's parts are on
+// one side.  The table says nothing about the size of a board, and the
+// check adds none.
+fn economic_table(b: FabBoard, qty: Int) -> FjCheck
+    let reason = economic_reason(b, qty)
+    if reason == ""
+        let opts = economic_options(b, qty)
+        FjCheck { name: "economic-table",
+            ok: true,
+            severity: "warning",
+            detail: "the Economic table has ${list.len(opts)} row(s) for ${b.layers} layers at ${n(b.thickness)} mm: ${str.join(opts, "; ")}" }
+    else
+        FjCheck { name: "economic-table",
+            ok: false,
+            severity: "warning",
+            detail: "the board cannot take Economic assembly, Standard only: ${reason}" }
+
 // The assembly class and whether the board fits it.
 fn assembly_class(b: FabBoard, qty: Int) -> FjCheck
     let name = class_of(b, qty)
@@ -399,6 +479,7 @@ pub fn run(whole: FabBoard, b: FabBoard, rows: [Cpl], bom: [BomLine], pos: Str, 
         footprints_agree(b, bom),
         positions_agree(whole, rows, pos),
         assembly_class(b, qty),
+        economic_table(b, qty),
         board_size(b),
         layers_check(b),
         thickness_check(b),

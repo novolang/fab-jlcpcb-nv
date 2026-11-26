@@ -1,0 +1,56 @@
+// fj_calib_tests — the part table of the calibration boards (tools/calib/parts.csv)
+// against the tables of the package: every part number is well formed, the cells
+// are numbered, no board holds more than 30 parts on a side, and the rows of the
+// family table that no footprint of the table reaches are the ones with no part
+// found and the ones another row shadows.
+
+use std.test
+use std.csv
+use std.fs
+use fjbom
+use fjcpl
+use fjdata
+
+// The rows of the table without its header: board, cell, footprint, value, part, status, note.
+fn table() -> [[Str]] [fs]
+    let text = fs.read("tools/calib/parts.csv") ?? ""
+    list.drop(csv.parse(text), 1)
+
+@test
+fn test_every_part_of_the_table_has_a_well_formed_number_a_status_and_a_cell_and_no_board_holds_more_than_thirty()
+    let rows = table()
+    test.assert(list.len(rows) > 50)
+    var per_board: [Int] = [0, 0, 0, 0]
+    for r in rows
+        test.assert(fjbom.part_number_ok(r[4]))
+        test.assert(r[5] == "confirmed" or r[5] == "unconfirmed")
+        test.assert(r[5] == "confirmed" or r[6] != "")
+        test.assert(str.contains(r[2], ":"))
+        let b = str.to_int(r[0]) ?? 0
+        test.assert(b >= 1 and b <= 3)
+        per_board[b] = per_board[b] + 1
+        test.assert_eq(str.to_int(r[1]) ?? 0, per_board[b])
+    test.assert(per_board[1] <= 30 and per_board[2] <= 30 and per_board[3] <= 30)
+
+@test
+fn test_the_family_rows_that_no_part_of_the_table_reaches_are_the_rows_with_no_part_found_and_the_rows_another_row_shadows()
+    let rows = table()
+    let fam = fjdata.rotations()
+    var reached: [Str] = []
+    for r in rows
+        match fjcpl.matching_row(r[2], fam)
+            Some(row) =>
+                if not list.contains(reached, row.pattern)
+                    list.push(reached, row.pattern)
+            None => test.assert(true)
+    var missed: [Str] = []
+    for row in fam
+        if not list.contains(reached, row.pattern) and not list.contains(missed, row.pattern)
+            list.push(missed, row.pattern)
+    // No part was found for these footprints (the README names them): ^D_SOT-23, ^SC-74-6,
+    // ^SOIC127P798X216-8N, ^TDSON-8-1, ^TO-277, ^UDFN-10, ^USON-10, ^VSON-8_ and ^VSSOP-10_-.
+    // These rows stand after a row that matches every name they match, so no name reaches them:
+    // ^SOIC-16_ and ^SOIC-8_ (after ^SOIC-), ^SOP-18_ and ^SOP-4_ (after ^SOP-), the second
+    // ^VSSOP-8_ row (after the first) and ^qfn- (the table is case sensitive).
+    test.assert_eq(str.join(missed, " "),
+        "^D_SOT-23 ^SC-74-6 ^SOIC-16_ ^SOIC-8_ ^SOIC127P798X216-8N ^SOP-18_ ^SOP-4_ ^TDSON-8-1 ^TO-277 ^UDFN-10 ^USON-10 ^VSON-8_ ^VSSOP-10_- ^VSSOP-8_3.0x3.0mm_P0.65mm ^qfn-")

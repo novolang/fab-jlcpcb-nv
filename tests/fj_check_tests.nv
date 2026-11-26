@@ -70,12 +70,65 @@ fn named(cs: [FjCheck], name: Str) -> FjCheck
 @test
 fn test_a_board_that_agrees_with_itself_passes_every_check()
     let cs = run(board(good_parts()), good_bom(), good_pos(), no_rules(), 5)
-    test.assert_eq(list.len(cs), 15)
+    test.assert_eq(list.len(cs), 16)
     test.assert_eq(list.len(list.filter(cs, c => not c.ok)), 0)
     test.assert_eq(named(cs, "assembly-class").detail,
         "Economic assembly: single-sided, up to 6 layers, 0.8 to 1.6 mm")
     test.assert(fjcheck.passes(cs))
     test.assert_eq(fjcheck.report(cs)[0], "ok       designators-unique  every designator is used once")
+
+fn with_layers_thickness(b: FabBoard, layers: Int, thickness: Float) -> FabBoard
+    FabBoard { file: b.file,
+        layers: layers,
+        thickness: thickness,
+        width: b.width,
+        height: b.height,
+        aux_x: b.aux_x,
+        aux_y: b.aux_y,
+        min_track: b.min_track,
+        min_via_drill: b.min_via_drill,
+        min_via_size: b.min_via_size,
+        min_pth: b.min_pth,
+        min_npth: b.min_npth,
+        min_ring: b.min_ring,
+        parts: b.parts }
+
+@test
+fn test_the_economic_table_check_lists_the_choices_of_a_board_that_has_a_row_and_says_why_when_it_has_none()
+    let base = board(good_parts())
+    let ok = named(run(base, good_bom(), good_pos(), no_rules(), 5), "economic-table")
+    test.assert_eq(ok.ok, true)
+    test.assert_eq(ok.severity, "warning")
+    test.assert_eq(ok.detail,
+        "the Economic table has 4 row(s) for 2 layers at 1.6 mm: solder mask Green, finish Lead-Free HASL or Leaded HASL or ENIG (lead-free or leaded), 2 to 50 pieces; solder mask Black, finish Lead-Free HASL or Leaded HASL, 2 to 50 pieces; solder mask Blue or Purple, finish Lead-Free HASL or Leaded HASL, 5 to 30 pieces; solder mask Red or White, finish Leaded HASL, 5 to 30 pieces")
+    // Four pieces leave out the colours that need five.
+    test.assert_eq(list.len(fjcheck.economic_options(base, 4)), 2)
+    test.assert_eq(fjcheck.economic_options(base, 40)[0],
+        "solder mask Green, finish Lead-Free HASL or Leaded HASL or ENIG (lead-free or leaded), 2 to 50 pieces")
+    // Eight layers: no row.
+    let eight = named(run(with_layers_thickness(base, 8, 1.6), good_bom(), good_pos(), no_rules(), 5), "economic-table")
+    test.assert_eq(eight.ok, false)
+    test.assert_eq(eight.severity, "warning")
+    test.assert_eq(eight.detail,
+        "the board cannot take Economic assembly, Standard only: the table lists 2, 4 and 6 layers and the board has 8")
+    // A thickness the layer count has no row for.
+    let thick = with_layers_thickness(base, 6, 1.2)
+    test.assert_eq(fjcheck.economic_reason(thick, 0),
+        "the table lists no 6-layer board of 1.2 mm (its 6-layer thicknesses are 1.6 mm)")
+    test.assert_eq(fjcheck.economic_reason(with_layers_thickness(base, 4, 0.8), 0),
+        "the table lists no 4-layer board of 0.8 mm (its 4-layer thicknesses are 1, 1.2, 1.6 mm)")
+    // A quantity no row of the layers and thickness takes.
+    test.assert_eq(fjcheck.economic_reason(with_layers_thickness(base, 6, 1.6), 40),
+        "no 6-layer row of 1.6 mm takes 40 pieces (they take 2 to 30)")
+    test.assert_eq(fjcheck.economic_reason(base, 0), "")
+    // The check never fails the package.
+    // Parts on both sides: the table has a row, and Economic is still ruled out.
+    let two = board([part("R1", "L:R_0603", "top", 1.0, 1.0), part("R2", "L:R_0603", "bottom", 2.0, 2.0)])
+    let sides = named(run(two, good_bom(), good_pos(), no_rules(), 5), "economic-table")
+    test.assert_eq(sides.ok, false)
+    test.assert_eq(sides.detail,
+        "the board cannot take Economic assembly, Standard only: the board has placed parts on both sides, and the form greys out Both Sides under Economic (seen 2026-11-26)")
+    test.assert(fjcheck.passes(run(with_layers_thickness(base, 8, 1.6), good_bom(), good_pos(), no_rules(), 5)))
 
 @test
 fn test_a_designator_used_twice_on_the_board_or_in_the_bill_is_an_error()
@@ -566,7 +619,7 @@ fn test_a_corrected_rotation_is_a_warning_to_review_and_a_report_line_is_made_fo
         0)
     test.assert_eq(named(c, "rotations").detail,
         "1 placed part(s) have a rotation correction to review in the manufacturer's preview: U1")
-    test.assert_eq(fjcheck.report(c)[14],
+    test.assert_eq(fjcheck.report(c)[15],
         "warning  rotations  1 placed part(s) have a rotation correction to review in the manufacturer's preview: U1")
     // A part number with a verified entry is not a correction to review, and a proposed one is.
     let verified = [PartRow { part: "C1",

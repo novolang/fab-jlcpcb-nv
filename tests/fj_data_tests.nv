@@ -51,7 +51,7 @@ fn test_the_look_ahead_row_of_the_source_is_written_as_two_rows_with_the_same_an
 fn test_the_headers_are_those_of_the_manufacturers_sample_files()
     test.assert_eq(fjdata.bom_header(), ["Comment", "Designator", "Footprint", "JLCPCB Part #"])
     test.assert_eq(fjdata.cpl_header(), ["Designator", "Mid X", "Mid Y", "Rotation", "Layer"])
-    test.assert_eq(list.len(fjdata.sources()), 5)
+    test.assert_eq(list.len(fjdata.sources()), 6)
     test.assert(str.contains(fjdata.sources()[0], "7f627b6be76081b962161b9eb9fe3a326a18c915"))
     test.assert(str.contains(fjdata.sources()[1], "order form on 2026-11-25"))
 
@@ -92,6 +92,35 @@ fn test_the_two_assembly_classes_and_the_largest_sizes_by_layer_count()
     test.assert_eq(fjdata.max_size(20), [656.0, 586.0])
 
 @test
+fn test_the_economic_table_has_the_eleven_rows_of_the_form_and_the_lookup_takes_layers_thickness_and_quantity()
+    let rows = fjdata.economic_rows()
+    test.assert_eq(list.len(rows), 11)
+    test.assert_eq(list.map(rows, r => r.layers), [2, 2, 2, 2, 2, 2, 2, 4, 4, 4, 6])
+    test.assert_eq(list.map(rows, r => r.thickness), [0.8, 1.0, 1.2, 1.6, 1.6, 1.6, 1.6, 1.0, 1.2, 1.6, 1.6])
+    test.assert_eq(list.map(rows, r => r.qty_min), [2, 2, 2, 2, 2, 5, 5, 2, 2, 2, 2])
+    test.assert_eq(list.map(rows, r => r.qty_max), [30, 30, 30, 50, 50, 30, 30, 30, 50, 50, 30])
+    test.assert_eq(rows[6].colours, ["Red", "White"])
+    test.assert_eq(rows[6].finishes, ["Leaded HASL"])
+    test.assert_eq(rows[10].finishes, ["ENIG"])
+    // Layers and thickness select the rows; a thickness is matched within 0.005 mm.
+    test.assert_eq(list.len(fjdata.economic_choices(2, 1.6, 0)), 4)
+    test.assert_eq(list.len(fjdata.economic_choices(2, 1.598, 0)), 4)
+    test.assert_eq(list.len(fjdata.economic_choices(2, 1.2, 0)), 1)
+    test.assert_eq(list.len(fjdata.economic_choices(4, 1.6, 0)), 1)
+    test.assert_eq(fjdata.economic_choices(6, 1.6, 0)[0].finishes, ["ENIG"])
+    // A quantity keeps the rows that take it.
+    test.assert_eq(list.len(fjdata.economic_choices(2, 1.6, 2)), 2)
+    test.assert_eq(list.len(fjdata.economic_choices(2, 1.6, 5)), 4)
+    test.assert_eq(list.len(fjdata.economic_choices(2, 1.6, 31)), 2)
+    test.assert_eq(list.len(fjdata.economic_choices(2, 1.6, 51)), 0)
+    test.assert_eq(list.len(fjdata.economic_choices(6, 1.6, 31)), 0)
+    // No row for any other layer count or thickness.
+    test.assert_eq(list.len(fjdata.economic_choices(8, 1.6, 0)), 0)
+    test.assert_eq(list.len(fjdata.economic_choices(1, 1.6, 0)), 0)
+    test.assert_eq(list.len(fjdata.economic_choices(6, 1.2, 0)), 0)
+    test.assert_eq(list.len(fjdata.economic_choices(2, 2.0, 0)), 0)
+
+@test
 fn test_every_part_entry_has_a_part_number_a_status_a_side_and_a_date_and_none_is_listed_twice()
     let rows = fjdata.part_rotations()
     test.assert_eq(list.len(rows), 33)
@@ -102,7 +131,7 @@ fn test_every_part_entry_has_a_part_number_a_status_a_side_and_a_date_and_none_i
         test.assert(list.len(r.sides) > 0)
         for s in r.sides
             test.assert(s == "top" or s == "bottom")
-        test.assert_eq(r.seen, "2026-11-25")
+        test.assert(r.seen == "2026-11-25" or r.seen == "2026-11-26")
         test.assert(r.note != "")
         test.assert_eq(r.dx, 0.0)
         test.assert_eq(r.dy, 0.0)
@@ -111,12 +140,14 @@ fn test_every_part_entry_has_a_part_number_a_status_a_side_and_a_date_and_none_i
         list.push(seen, r.part)
 
 @test
-fn test_the_proposed_entries_are_the_four_parts_the_preview_drew_wrong_and_every_other_entry_is_verified()
+fn test_every_entry_is_verified_and_the_four_parts_drawn_wrong_on_2026_11_25_were_seen_right_on_2026_11_26()
     let rows = fjdata.part_rotations()
-    let proposed = list.filter(rows, r => r.status == "proposed")
-    test.assert_eq(list.map(proposed, r => r.part), ["C295747", "C2895249", "C2652978", "C404280"])
-    test.assert_eq(list.map(proposed, r => r.rotation), [0.0, 0.0, 270.0, 90.0])
-    test.assert_eq(list.len(list.filter(rows, r => r.status == "verified")), 29)
+    test.assert_eq(list.len(list.filter(rows, r => r.status == "proposed")), 0)
+    test.assert_eq(list.len(list.filter(rows, r => r.status == "verified")), 33)
+    let later = list.filter(rows, r => r.seen == "2026-11-26")
+    test.assert_eq(list.map(later, r => r.part), ["C295747", "C2895249", "C2652978", "C404280"])
+    test.assert_eq(list.map(later, r => r.rotation), [0.0, 0.0, 270.0, 90.0])
+    test.assert(list.all(later, r => r.sides == ["top"]))
     // The parts that stand on both sides of the bottom-side kit were seen on both.
     let both = list.filter(rows, r => list.len(r.sides) == 2)
     test.assert_eq(list.len(both), 9)

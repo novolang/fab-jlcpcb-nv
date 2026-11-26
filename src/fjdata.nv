@@ -1,6 +1,6 @@
 // fjdata — the facts the package carries as data, each with its source.
 //
-// There are four tables.
+// There are five tables.
 //
 // PART ROTATIONS.  The preview of JLCPCB's order form draws a part from
 // the part's own model, so the rotation a part needs follows its JLCPCB
@@ -25,6 +25,12 @@
 // 18_` (0 degrees) and `^SOP-` (270 degrees), which give the same answer
 // for every name.  The Toolkit's licence (Apache-2.0) allows this
 // reproduction; its text is at the source.
+//
+// ECONOMIC ROWS.  The manufacturer's table "PCB Specs for Economic PCB
+// Assembly", read on 2026-11-26 from the order form: for a count of
+// layers and a thickness, the solder mask colours, the surface finishes
+// and the quantities that keep a board in the Economic class.  The table
+// says nothing about the size of a board, and none is added here.
 //
 // HEADERS.  The columns of the bill of materials are those of JLCPCB's
 // sample BOM (https://s3.amazonaws.com/helpscout.net/docs/assets/59f1de7804286313cffbb22c/attachments/60ee4acd9e87cb3d0124d284/Sample-BOM_JLCSMT.xlsx,
@@ -67,6 +73,18 @@ pub struct PartRow
     sides: [Str]
     seen: Str
     note: Str
+
+// One row of the manufacturer's table of PCB specs for Economic assembly:
+// a board of `layers` copper layers and `thickness` millimetres, in one of
+// the `colours`, with one of the `finishes`, ordered in a quantity of
+// `qty_min` to `qty_max` pieces.
+pub struct EconomicRow
+    layers: Int
+    thickness: Float
+    colours: [Str]
+    finishes: [Str]
+    qty_min: Int
+    qty_max: Int
 
 // What the manufacturer's pages say a board may be.
 //
@@ -118,7 +136,8 @@ pub fn cpl_header() -> [Str] []
 // The sources of the tables, as lines for a report.
 pub fn sources() -> [Str] []
     ["rotations: Fabrication Toolkit plugins/transformations.csv at 7f627b6be76081b962161b9eb9fe3a326a18c915, Apache-2.0, https://github.com/bennymeg/Fabrication-Toolkit, with the row ^SOT-23-5 added",
-     "part rotations: read from the preview of JLCPCB's order form on 2026-11-25, by part number, with a status for each",
+     "part rotations: read from the preview of JLCPCB's order form on 2026-11-25 and 2026-11-26, by part number, with a status for each",
+     "economic rows: the table PCB Specs for Economic PCB Assembly on JLCPCB's order form, read 2026-11-26",
      "bom columns: JLCPCB sample BOM, https://s3.amazonaws.com/helpscout.net/docs/assets/59f1de7804286313cffbb22c/attachments/60ee4acd9e87cb3d0124d284/Sample-BOM_JLCSMT.xlsx",
      "cpl columns: https://jlcpcb.com/help/article/pick-place-file-for-pcb-assembly, updated 2026-09-09",
      "capabilities: https://jlcpcb.com/capabilities/pcb-capabilities and https://jlcpcb.com/capabilities/pcb-assembly-capabilities, read 2026-11-23"]
@@ -179,6 +198,42 @@ pub fn assemblies() -> [Assembly] []
         qty_min: 2,
         qty_max: 80000 }]
 
+// A row of the Economic table.
+fn econ(layers: Int, thickness: Float, colours: [Str], finishes: [Str], qty_min: Int, qty_max: Int) -> EconomicRow
+    EconomicRow { layers: layers,
+        thickness: thickness,
+        colours: colours,
+        finishes: finishes,
+        qty_min: qty_min,
+        qty_max: qty_max }
+
+// The table "PCB Specs for Economic PCB Assembly" of JLCPCB's order form,
+// read on 2026-11-26, row for row.  A board with a layer count or a
+// thickness that the table does not list takes Standard assembly only.
+// The manufacturer may change the table.  The finish of the 2-layer 1.6 mm
+// green row is written as the table has it: ENIG, lead-free or leaded.
+pub fn economic_rows() -> [EconomicRow] []
+    let hasl = ["Lead-Free HASL", "Leaded HASL"]
+    [
+        econ(2, 0.8, ["Green"], hasl, 2, 30),
+        econ(2, 1.0, ["Green", "Black"], hasl, 2, 30),
+        econ(2, 1.2, ["Green", "Black"], hasl, 2, 30),
+        econ(2, 1.6, ["Green"], ["Lead-Free HASL", "Leaded HASL", "ENIG (lead-free or leaded)"], 2, 50),
+        econ(2, 1.6, ["Black"], hasl, 2, 50),
+        econ(2, 1.6, ["Blue", "Purple"], hasl, 5, 30),
+        econ(2, 1.6, ["Red", "White"], ["Leaded HASL"], 5, 30),
+        econ(4, 1.0, ["Green"], hasl, 2, 30),
+        econ(4, 1.2, ["Green"], hasl, 2, 50),
+        econ(4, 1.6, ["Green"], ["Lead-Free HASL", "Leaded HASL", "ENIG"], 2, 50),
+        econ(6, 1.6, ["Green"], ["ENIG"], 2, 30)]
+
+// The rows of the Economic table that hold for a board of `layers` layers
+// and `thickness` millimetres, and for `qty` pieces when `qty` is above
+// zero.  The thickness matches within 0.005 mm.
+pub fn economic_choices(layers: Int, thickness: Float, qty: Int) -> [EconomicRow] []
+    list.filter(economic_rows(),
+        r => r.layers == layers and math.abs(r.thickness - thickness) < 0.005 and (qty <= 0 or qty >= r.qty_min and qty <= r.qty_max))
+
 // The largest board, in millimetres, the PCB capabilities page gives for
 // a count of copper layers: 606 by 510 for one layer, 670 by 600 for two,
 // 663 by 593 for four and 656 by 586 for six and more.  A count of three
@@ -193,77 +248,65 @@ pub fn max_size(layers: Int) -> [Float] []
     else
         [656.0, 586.0]
 
-// An entry the preview showed right on `sides` with the rotation `rot`.
-fn seen_right(part: Str, rot: Float, sides: [Str], note: Str) -> PartRow
+// An entry the preview showed right on `sides` with the rotation `rot` on
+// the date `seen`.
+fn seen_right(part: Str, rot: Float, sides: [Str], seen: Str, note: Str) -> PartRow
     PartRow { part: part,
         rotation: rot,
         dx: 0.0,
         dy: 0.0,
         status: "verified",
         sides: sides,
-        seen: "2026-11-25",
-        note: note }
-
-// An entry for a part the preview drew wrong with the family value, with
-// the rotation `rot` read from the picture.
-fn drawn_wrong(part: Str, rot: Float, sides: [Str], note: Str) -> PartRow
-    PartRow { part: part,
-        rotation: rot,
-        dx: 0.0,
-        dy: 0.0,
-        status: "proposed",
-        sides: sides,
-        seen: "2026-11-25",
+        seen: seen,
         note: note }
 
 // The part rotations: the parts that a preview of JLCPCB's order form
-// showed on 2026-11-25.
+// showed on 2026-11-25 and 2026-11-26.
 //
 // A `verified` entry was drawn right with its value on the sides named.
 // A `proposed` entry was drawn wrong with the family value (or, where the
 // family table has no row, with no addition); its value is the one that
 // turns the model onto the footprint's pin 1, read from the picture, and
-// has not been seen right.  A part that no preview showed has no entry.
+// has not been seen right.  The table holds no proposed entry; the status
+// is for the next part a preview draws wrong.  A part that no preview
+// showed has no entry.
 // The addition is to the rotation in the board file; on the bottom side
 // the package turns that rotation to 180 minus itself first.
 pub fn part_rotations() -> [PartRow] []
     [
-        seen_right("C347478", 180.0, ["top", "bottom"], "AO3407 P-channel MOSFET, SOT-23"),
-        seen_right("C51118", 270.0, ["top", "bottom"], "AP2112K-3.3 regulator, SOT-23-5"),
-        seen_right("C32574", 270.0, ["top", "bottom"], "TP4054 charger, SOT-23-5"),
-        seen_right("C48997863", 0.0, ["top", "bottom"], "1N5819 diode, SOD-323F"),
-        seen_right("C2286", 0.0, ["top", "bottom"], "red LED, 0603"),
-        seen_right("C25803", 0.0, ["top", "bottom"], "100 kohm resistor, 0603"),
-        seen_right("C23186", 0.0, ["top", "bottom"], "5.1 kohm resistor, 0603"),
-        seen_right("C21190", 0.0, ["top", "bottom"], "1 kohm resistor, 0603"),
-        seen_right("C22976", 0.0, ["top", "bottom"], "2 Mohm resistor, 0603"),
-        seen_right("C165948", 0.0, ["top"], "TYPE-C-31-M-12 USB-C receptacle"),
-        seen_right("C3029343", 0.0, ["top"], "WAFER-SH1.0-4PWB JST SH connector"),
-        seen_right("C2999113", 0.0, ["top"], "TPD3E001DRLR, SOT-553"),
-        seen_right("C125103", 0.0, ["top"], "blue LED, 0603"),
-        seen_right("C139797", 0.0, ["top"], "SKRPACE010 push button"),
-        seen_right("C2682773", 0.0, ["top"], "X201632MOB4SI 32 MHz crystal"),
-        seen_right("C337910", 0.0, ["top"], "2.2 uH inductor, 0603"),
-        seen_right("C307331", 0.0, ["top"], "100 nF capacitor, 0402"),
-        seen_right("C96446", 0.0, ["top"], "10 uF capacitor, 0603"),
-        seen_right("C15849", 0.0, ["top"], "1 uF capacitor, 0603"),
-        seen_right("C23733", 0.0, ["top"], "4.7 uF capacitor, 0402"),
-        seen_right("C23630", 0.0, ["top"], "2.2 uF capacitor, 0603"),
-        seen_right("C126505", 0.0, ["top"], "300 pF capacitor, 0402"),
-        seen_right("C52923", 0.0, ["top"], "1 uF capacitor, 0402"),
-        seen_right("C1547", 0.0, ["top"], "12 pF capacitor, 0402"),
-        seen_right("C1546", 0.0, ["top"], "100 pF capacitor, 0402"),
-        seen_right("C25741", 0.0, ["top"], "100 kohm resistor, 0402"),
-        seen_right("C25778", 0.0, ["top"], "330 kohm resistor, 0402"),
-        seen_right("C25744", 0.0, ["top"], "10 kohm resistor, 0402"),
-        seen_right("C25117", 0.0, ["top"], "470 ohm resistor, 0402"),
-        drawn_wrong("C295747",
-        0.0,
-        ["top"],
-        "S2B-PH-SM4-TB JST PH connector; drawn 180 degrees off with the row ^JST_PH_S"),
-        drawn_wrong("C2895249", 0.0, ["top"], "nRF52833-QDAA-R, QFN-40; drawn 90 degrees off with the row ^QFN-"),
-        drawn_wrong("C2652978", 270.0, ["top"], "TXB0106RGYR, VQFN-16; drawn 90 degrees off with no addition"),
-        drawn_wrong("C404280", 90.0, ["top"], "MHPA1010RGBDT RGB LED; drawn 90 degrees off with no addition")]
+        seen_right("C347478", 180.0, ["top", "bottom"], "2026-11-25", "AO3407 P-channel MOSFET, SOT-23"),
+        seen_right("C51118", 270.0, ["top", "bottom"], "2026-11-25", "AP2112K-3.3 regulator, SOT-23-5"),
+        seen_right("C32574", 270.0, ["top", "bottom"], "2026-11-25", "TP4054 charger, SOT-23-5"),
+        seen_right("C48997863", 0.0, ["top", "bottom"], "2026-11-25", "1N5819 diode, SOD-323F"),
+        seen_right("C2286", 0.0, ["top", "bottom"], "2026-11-25", "red LED, 0603"),
+        seen_right("C25803", 0.0, ["top", "bottom"], "2026-11-25", "100 kohm resistor, 0603"),
+        seen_right("C23186", 0.0, ["top", "bottom"], "2026-11-25", "5.1 kohm resistor, 0603"),
+        seen_right("C21190", 0.0, ["top", "bottom"], "2026-11-25", "1 kohm resistor, 0603"),
+        seen_right("C22976", 0.0, ["top", "bottom"], "2026-11-25", "2 Mohm resistor, 0603"),
+        seen_right("C165948", 0.0, ["top"], "2026-11-25", "TYPE-C-31-M-12 USB-C receptacle"),
+        seen_right("C3029343", 0.0, ["top"], "2026-11-25", "WAFER-SH1.0-4PWB JST SH connector"),
+        seen_right("C2999113", 0.0, ["top"], "2026-11-25", "TPD3E001DRLR, SOT-553"),
+        seen_right("C125103", 0.0, ["top"], "2026-11-25", "blue LED, 0603"),
+        seen_right("C139797", 0.0, ["top"], "2026-11-25", "SKRPACE010 push button"),
+        seen_right("C2682773", 0.0, ["top"], "2026-11-25", "X201632MOB4SI 32 MHz crystal"),
+        seen_right("C337910", 0.0, ["top"], "2026-11-25", "2.2 uH inductor, 0603"),
+        seen_right("C307331", 0.0, ["top"], "2026-11-25", "100 nF capacitor, 0402"),
+        seen_right("C96446", 0.0, ["top"], "2026-11-25", "10 uF capacitor, 0603"),
+        seen_right("C15849", 0.0, ["top"], "2026-11-25", "1 uF capacitor, 0603"),
+        seen_right("C23733", 0.0, ["top"], "2026-11-25", "4.7 uF capacitor, 0402"),
+        seen_right("C23630", 0.0, ["top"], "2026-11-25", "2.2 uF capacitor, 0603"),
+        seen_right("C126505", 0.0, ["top"], "2026-11-25", "300 pF capacitor, 0402"),
+        seen_right("C52923", 0.0, ["top"], "2026-11-25", "1 uF capacitor, 0402"),
+        seen_right("C1547", 0.0, ["top"], "2026-11-25", "12 pF capacitor, 0402"),
+        seen_right("C1546", 0.0, ["top"], "2026-11-25", "100 pF capacitor, 0402"),
+        seen_right("C25741", 0.0, ["top"], "2026-11-25", "100 kohm resistor, 0402"),
+        seen_right("C25778", 0.0, ["top"], "2026-11-25", "330 kohm resistor, 0402"),
+        seen_right("C25744", 0.0, ["top"], "2026-11-25", "10 kohm resistor, 0402"),
+        seen_right("C25117", 0.0, ["top"], "2026-11-25", "470 ohm resistor, 0402"),
+        seen_right("C295747", 0.0, ["top"], "2026-11-26", "S2B-PH-SM4-TB JST PH connector; the row ^JST_PH_S drew it 180 degrees off"),
+        seen_right("C2895249", 0.0, ["top"], "2026-11-26", "nRF52833-QDAA-R, QFN-40; the row ^QFN- drew it 90 degrees off"),
+        seen_right("C2652978", 270.0, ["top"], "2026-11-26", "TXB0106RGYR, VQFN-16; with no addition it was drawn 90 degrees off"),
+        seen_right("C404280", 90.0, ["top"], "2026-11-26", "MHPA1010RGBDT RGB LED; with no addition it was drawn 90 degrees off")]
 
 // The rotation table: the rows of its source, in order, and one row added.
 //

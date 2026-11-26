@@ -46,6 +46,8 @@ pub fn questions(b: FabBoard, o: Order) -> [Str] []
     list.push(out,
         "Surface finish and solder mask colour are not in a board file; the form asks for them.  A finish other than the default is a choice for fine-pitch or BGA parts.")
     list.push(out,
+        "Material Type, Via Plating Method and Deburring/Edge rounding are not in a board file either, and the form preselects them.  Observed on 2026-11-26 on a 2-layer board of 33.29 by 18.06 mm: with PCB Assembly off the form showed Via Plating Method as Not Specified and its Charge Details had no Material Type line and no Via Plating Method line (OSP $4.10, LeadFree HASL $5.20); with PCB Assembly on and Economic selected it showed Material Type FR4 TG135 and Via Plating Method Horizontal Electroless Copper Plating, and charged 3.32 for each; whether Standard does the same was not observed.  OSP is the cheaper finish on the bare board and rules Economic assembly out.  Read the charge lines before the price.")
+    list.push(out,
         "Copper weight: every capability figure used is for 1 oz.  A board that needs more copper is checked against other figures.")
     list.push(out,
         "Does the manufacturer take plated and non-plated holes in one drill file?  The article's steps produce one; not read on a manufacturer page.")
@@ -125,6 +127,18 @@ pub fn sheet(b: FabBoard, rows: [Cpl], bom: [BomLine], cs: [FjCheck], o: Order) 
     list.push(out, "")
     list.push(out,
         "- Class: ${o.class}${if list.len(o.forced) > 0 then " (forced by ${str.join(list.take(o.forced, 8), ", ")}: only Standard places them)" else ""}")
+    let reason = fjcheck.economic_reason(b, o.qty)
+    if reason == ""
+        list.push(out,
+            "- The manufacturer's table of PCB specs for Economic assembly (read 2026-11-26) lists these choices on the form for ${b.layers} layers at ${fjcpl.fixed6(b.thickness)} mm${if o.qty > 0 then " and ${o.qty} pieces" else ""}:")
+        for l in fjcheck.economic_options(b, o.qty)
+            list.push(out, "  - ${l}")
+    else
+        list.push(out,
+            "- The board cannot take Economic assembly, Standard only: ${reason}.  The table is the manufacturer's \"PCB Specs for Economic PCB Assembly\" of the order form, read 2026-11-26.")
+    if o.class == "Economic"
+        list.push(out,
+            "- Seen on the form on 2026-11-26 with Economic selected (2 layers, 33.29 by 18.06 mm, 1.6 mm, green, LeadFree HASL, 5 pieces): the board kept its own size, with no edge rails and tooling holes added by JLCPCB; Assembly Side offered Top Side or Bottom Side and greyed out Both Sides; PCBA Qty offered 5 or 2.")
     list.push(out, "- Placed parts: ${list.len(rows)} (${top} on top, ${bottom} on the bottom)")
     list.push(out, "- Bill of materials lines: ${list.len(fjbom.placed(bom))}")
     list.push(out,
@@ -141,8 +155,13 @@ pub fn sheet(b: FabBoard, rows: [Cpl], bom: [BomLine], cs: [FjCheck], o: Order) 
     list.push(out, "")
     list.push(out,
         "1. Open the quote page and enter the size, the layer count, the thickness and the quantity above.  Upload the Gerber zip.")
-    list.push(out,
-        "2. Choose the finish and the mask colour.  Switch on PCB Assembly, choose the assembly side (${side_words(top, bottom)}) and the class ${o.class}.  Do not pay for the board until the assembly parameters are chosen: the manufacturer takes the two together.")
+    let finishes = fjcheck.economic_finishes(b, o.qty)
+    if o.class == "Economic" and list.len(finishes) > 0
+        list.push(out,
+            "2. Set the surface finish and the solder mask colour first, from one row of the Economic table listed under The assembly (the finishes for this board: ${str.join(finishes, ", ")}).  The finish the form preselects can rule Economic out: the form preselected OSP on 2026-11-26, and OSP is not an Economic finish; it greyed out Economic on a 2-layer, 1.6 mm, green board until the Surface Finish was set to \"LeadFree HASL\".  The default may change, so read the finish before the type.  Then switch on PCB Assembly, choose the assembly side (${side_words(top, bottom)}) and the class ${o.class}, and read the class the form took.  Do not pay for the board until the assembly parameters are chosen: the manufacturer takes the two together.")
+    else
+        list.push(out,
+            "2. Choose the finish and the mask colour.  Switch on PCB Assembly, choose the assembly side (${side_words(top, bottom)}) and the class ${o.class}.  Do not pay for the board until the assembly parameters are chosen: the manufacturer takes the two together.")
     list.push(out,
         "3. Upload `bom.csv` and `cpl.csv` and press Process BOM&CPL.  Review the matched parts: every line carries the part number written in the bill, and a line that shows another number is a finding.")
     list.push(out,

@@ -85,6 +85,71 @@ fn test_the_sheet_of_a_ready_double_sided_board_names_the_class_the_sides_and_th
     test.assert(str.contains(t, "## Sources of the tables"))
     test.assert(str.contains(t, "1 part(s) are left out by the design (H1)"))
 
+fn with_layers(b: FabBoard, n: Int) -> FabBoard
+    FabBoard { file: b.file,
+        layers: n,
+        thickness: b.thickness,
+        width: b.width,
+        height: b.height,
+        aux_x: b.aux_x,
+        aux_y: b.aux_y,
+        min_track: b.min_track,
+        min_via_drill: b.min_via_drill,
+        min_via_size: b.min_via_size,
+        min_pth: b.min_pth,
+        min_npth: b.min_npth,
+        min_ring: b.min_ring,
+        parts: b.parts }
+
+@test
+fn test_the_assembly_section_lists_the_economic_choices_for_the_boards_layers_and_thickness_or_says_why_there_are_none()
+    let base = board(90.0, [part("R1", "top", false, false)])
+    // 2 layers at 1.6 mm, five pieces: all four rows of the table take five.
+    let t2 = fjsheet.sheet(base, fjcpl.rows(base, []), bom(), [], order(5, "Economic", []))
+    test.assert(str.contains(t2,
+        "- The manufacturer's table of PCB specs for Economic assembly (read 2026-11-26) lists these choices on the form for 2 layers at 1.6 mm and 5 pieces:\n  - solder mask Green, finish Lead-Free HASL or Leaded HASL or ENIG (lead-free or leaded), 2 to 50 pieces\n  - solder mask Black, finish Lead-Free HASL or Leaded HASL, 2 to 50 pieces\n  - solder mask Blue or Purple, finish Lead-Free HASL or Leaded HASL, 5 to 30 pieces\n  - solder mask Red or White, finish Leaded HASL, 5 to 30 pieces\n"))
+    // No quantity chosen: the same rows, and no quantity in the sentence.
+    let t0 = fjsheet.sheet(base, fjcpl.rows(base, []), bom(), [], order(0, "Economic", []))
+    test.assert(str.contains(t0, "for 2 layers at 1.6 mm:\n  - solder mask Green"))
+    // Eight layers: none, and the reason.
+    let b8 = with_layers(base, 8)
+    let t8 = fjsheet.sheet(b8, fjcpl.rows(b8, []), bom(), [], order(5, "Standard", []))
+    test.assert(str.contains(t8,
+        "- The board cannot take Economic assembly, Standard only: the table lists 2, 4 and 6 layers and the board has 8.  The table is the manufacturer's \"PCB Specs for Economic PCB Assembly\" of the order form, read 2026-11-26.\n"))
+    test.assert(not str.contains(t8, "lists these choices"))
+
+@test
+fn test_a_board_with_parts_on_both_sides_cannot_take_economic_and_an_economic_board_gets_the_observation_of_the_form()
+    let two = board(90.0, [part("R1", "top", false, false), part("R2", "bottom", false, false)])
+    let t = fjsheet.sheet(two, fjcpl.rows(two, []), bom(), [], order(5, "Standard", []))
+    test.assert(str.contains(t,
+        "- The board cannot take Economic assembly, Standard only: the board has placed parts on both sides, and the form greys out Both Sides under Economic (seen 2026-11-26).  The table is"))
+    test.assert(not str.contains(t, "Seen on the form on 2026-11-26 with Economic selected"))
+    // A part left out of the position file does not count as a side.
+    let one = board(90.0, [part("R1", "top", false, false), part("R2", "bottom", false, true)])
+    let t1 = fjsheet.sheet(one, fjcpl.rows(one, []), bom(), [], order(5, "Economic", []))
+    test.assert(str.contains(t1, "lists these choices on the form for 2 layers at 1.6 mm and 5 pieces:"))
+    test.assert(str.contains(t1,
+        "- Seen on the form on 2026-11-26 with Economic selected (2 layers, 33.29 by 18.06 mm, 1.6 mm, green, LeadFree HASL, 5 pieces): the board kept its own size, with no edge rails and tooling holes added by JLCPCB; Assembly Side offered Top Side or Bottom Side and greyed out Both Sides; PCBA Qty offered 5 or 2.\n"))
+    // Eight layers and both sides give both reasons.
+    let both8 = with_layers(two, 8)
+    test.assert_eq(fjcheck.economic_reason(both8, 5),
+        "the board has placed parts on both sides, and the form greys out Both Sides under Economic (seen 2026-11-26); the table lists 2, 4 and 6 layers and the board has 8")
+
+@test
+fn test_the_steps_of_an_economic_board_name_the_finish_before_the_assembly_is_switched_on()
+    let base = board(90.0, [part("R1", "top", false, false)])
+    let t = fjsheet.sheet(base, fjcpl.rows(base, []), bom(), [], order(5, "Economic", []))
+    test.assert(str.contains(t,
+        "2. Set the surface finish and the solder mask colour first, from one row of the Economic table listed under The assembly (the finishes for this board: Lead-Free HASL, Leaded HASL, ENIG (lead-free or leaded)).  The finish the form preselects can rule Economic out: the form preselected OSP on 2026-11-26, and OSP is not an Economic finish; it greyed out Economic on a 2-layer, 1.6 mm, green board until the Surface Finish was set to \"LeadFree HASL\".  The default may change, so read the finish before the type.  Then switch on PCB Assembly, choose the assembly side (top) and the class Economic, and read the class the form took."))
+    // A Standard board keeps the plain step.
+    let b8 = with_layers(base, 8)
+    let t8 = fjsheet.sheet(b8, fjcpl.rows(b8, []), bom(), [], order(5, "Standard", []))
+    test.assert(str.contains(t8, "2. Choose the finish and the mask colour.  Switch on PCB Assembly, choose the assembly side (top) and the class Standard."))
+    test.assert(not str.contains(t8, "can rule Economic out"))
+    test.assert_eq(fjcheck.economic_finishes(with_layers(base, 6), 5), ["ENIG"])
+    test.assert_eq(fjcheck.economic_finishes(b8, 5), [])
+
 @test
 fn test_the_sheet_names_the_pcba_type_to_select_in_its_first_lines_and_says_the_form_may_preselect_the_other()
     let b = board(90.0, [part("R1", "top", false, false)])
@@ -114,16 +179,21 @@ fn test_the_questions_ask_about_a_panel_only_for_a_small_standard_board_and_abou
     let small = board(30.0, [])
     let big = board(90.0, [])
     let qs = fjsheet.questions(small, order(0, "Standard", []))
-    test.assert_eq(list.len(qs), 8)
-    test.assert(str.contains(qs[7], "Is a panel needed"))
+    test.assert_eq(list.len(qs), 9)
+    test.assert(str.contains(qs[8], "Is a panel needed"))
     test.assert(str.contains(qs[0], "Quantity"))
+    test.assert(str.contains(qs[2], "Material Type, Via Plating Method and Deburring/Edge rounding are not in a board file either"))
+    test.assert(str.contains(qs[2], "FR4 TG135"))
+    test.assert(str.contains(qs[2], "with PCB Assembly off the form showed Via Plating Method as Not Specified"))
+    test.assert(str.contains(qs[2], "whether Standard does the same was not observed."))
+    test.assert(str.contains(qs[2], "rules Economic assembly out"))
     test.assert(not str.contains(qs[0], "the checks used"))
-    test.assert_eq(list.len(fjsheet.questions(big, order(0, "Standard", []))), 7)
-    test.assert_eq(list.len(fjsheet.questions(small, order(0, "Economic", []))), 7)
+    test.assert_eq(list.len(fjsheet.questions(big, order(0, "Standard", []))), 8)
+    test.assert_eq(list.len(fjsheet.questions(small, order(0, "Economic", []))), 8)
     let with_qty = fjsheet.questions(big, order(5, "Economic", ["H1", "H2"]))
     test.assert(str.contains(with_qty[0], "the checks used 5"))
-    test.assert_eq(list.len(with_qty), 8)
-    test.assert(str.contains(with_qty[7], "2 part(s) are left out by the design (H1, H2)"))
+    test.assert_eq(list.len(with_qty), 9)
+    test.assert(str.contains(with_qty[8], "2 part(s) are left out by the design (H1, H2)"))
 
 @test
 fn test_a_refused_order_says_so_and_a_forced_class_and_a_skipped_part_are_named()
@@ -193,7 +263,10 @@ fn test_the_sheet_names_near_the_top_each_part_whose_rotation_is_not_verified_an
         named_part("U1", "BM15x-LGA-45_15.8x10mm", 270.0),
         named_part("D1", "LED_SMD:LED_0603_1608Metric", 0.0)])
     let bill = numbered([["Q1", "C347478"], ["J4", "C295747"], ["U7", "C7466043"], ["U1", "C9900148376"]])
-    let rows = fjcpl.rows_for(b, fjdata.rotations(), fjdata.part_rotations(), bill)
+    // The entries are the test's own: the real table holds no proposed entry.
+    let parts = [PartRow { part: "C347478", rotation: 180.0, dx: 0.0, dy: 0.0, status: "verified", sides: ["top", "bottom"], seen: "2026-11-25", note: "n" },
+        PartRow { part: "C295747", rotation: 0.0, dx: 0.0, dy: 0.0, status: "proposed", sides: ["top"], seen: "2026-11-25", note: "n" }]
+    let rows = fjcpl.rows_for(b, fjdata.rotations(), parts, bill)
     let t = fjsheet.sheet(b, rows, bom(), [], order(5, "Standard", []))
     let lines = str.split(t, "\n")
     test.assert_eq(lines[6], "## Rotations not verified")
